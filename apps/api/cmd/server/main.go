@@ -10,6 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	httpSwagger "github.com/swaggo/http-swagger"
+	"github.com/wignn/komas-api/docs"
 	"github.com/wignn/komas-api/internal/config"
 	"github.com/wignn/komas-api/internal/handler/http/middleware"
 	v1 "github.com/wignn/komas-api/internal/handler/http/v1"
@@ -18,10 +23,6 @@ import (
 	"github.com/wignn/komas-api/internal/service"
 	"github.com/wignn/komas-api/pkg/logger"
 	"github.com/wignn/komas-api/pkg/token"
-	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func main() {
@@ -72,7 +73,11 @@ func main() {
 		MaxAge:           300,
 	}))
 	r.Get("/healthz", healthHandler.HealthCheck)
-	r.Get("/swagger/*", httpSwagger.WrapHandler)
+	r.Get("/swagger/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		_, _ = w.Write(docs.OpenAPI)
+	})
+	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/openapi.yaml")))
 	v1.RegisterRoutes(r, handlers, tokenMaker, redisClient)
 
 	server := &http.Server{

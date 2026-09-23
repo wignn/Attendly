@@ -1,0 +1,479 @@
+openapi: 3.1.0
+info:
+  title: AbsenKu API
+  version: 1.0.0
+  summary: API sistem absensi SMPN 1 Tirtajaya
+  description: |
+    Spesifikasi kontrak API untuk frontend dan backend AbsenKu.
+
+    Peran pengguna: SUPER_ADMIN, TEACHER, dan HOMEROOM_TEACHER.
+    Semua waktu memakai ISO 8601; zona sekolah Asia/Jakarta.
+servers:
+  - url: https://api.absenku.example.com/api/v1
+    description: Production
+  - url: http://localhost:3000/api/v1
+    description: Local development
+tags:
+  - name: Auth
+    description: Autentikasi dan sesi pengguna
+  - name: Admin Dashboard
+  - name: Teachers
+  - name: Students
+  - name: Classes
+  - name: Subjects
+  - name: Academic Years
+  - name: Teaching Assignments
+  - name: Schedules
+  - name: Attendance
+  - name: Reports
+  - name: Exports
+  - name: Audit Logs
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Masuk dengan email dan kata sandi
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenPair'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/google:
+    post:
+      tags: [Auth]
+      summary: Masuk menggunakan Google
+      operationId: loginWithGoogle
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenPair'
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Perbarui access token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenPair'
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Keluar dan cabut refresh token
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '204':
+          description: Berhasil keluar
+  /me:
+    get:
+      tags: [Auth]
+      summary: Ambil profil dan izin pengguna aktif
+      operationId: getMe
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+  /admin/dashboard:
+    get:
+      tags: [Admin Dashboard]
+      summary: Ringkasan dashboard Super Admin
+      operationId: getAdminDashboard
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboard'
+  /teachers:
+    get:
+      tags: [Teachers]
+      summary: Daftar guru
+      operationId: listTeachers
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTeachers'
+    post:
+      tags: [Teachers]
+      summary: Tambah guru
+      operationId: createTeacher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeacherCreate'
+      responses:
+        '201':
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Teacher'
+  /students:
+    get:
+      tags: [Students]
+      summary: Daftar siswa
+      operationId: listStudents
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStudents'
+    post:
+      tags: [Students]
+      summary: Tambah siswa
+      operationId: createStudent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentCreate'
+      responses:
+        '201':
+          description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+  /classes:
+    get:
+      tags: [Classes]
+      summary: Daftar kelas
+      operationId: listClasses
+      responses:
+        '200':
+          description: Berhasil
+    post:
+      tags: [Classes]
+      summary: Tambah kelas
+      operationId: createClass
+      responses:
+        '201':
+          description: Berhasil dibuat
+  /subjects:
+    get:
+      tags: [Subjects]
+      summary: Daftar mata pelajaran
+      operationId: listSubjects
+      responses:
+        '200':
+          description: Berhasil
+    post:
+      tags: [Subjects]
+      summary: Tambah mata pelajaran
+      operationId: createSubject
+      responses:
+        '201':
+          description: Berhasil dibuat
+  /academic-years:
+    get:
+      tags: [Academic Years]
+      summary: Daftar tahun ajaran
+      operationId: listAcademicYears
+      responses:
+        '200':
+          description: Berhasil
+    post:
+      tags: [Academic Years]
+      summary: Tambah tahun ajaran
+      operationId: createAcademicYear
+      responses:
+        '201':
+          description: Berhasil dibuat
+  /teaching-assignments:
+    get:
+      tags: [Teaching Assignments]
+      summary: Daftar penugasan mengajar
+      operationId: listTeachingAssignments
+      responses:
+        '200':
+          description: Berhasil
+    post:
+      tags: [Teaching Assignments]
+      summary: Buat penugasan mengajar
+      operationId: createTeachingAssignment
+      responses:
+        '201':
+          description: Berhasil dibuat
+  /schedules:
+    get:
+      tags: [Schedules]
+      summary: Daftar jadwal kelas
+      operationId: listSchedules
+      responses:
+        '200':
+          description: Berhasil
+    post:
+      tags: [Schedules]
+      summary: Tambah jadwal kelas
+      operationId: createSchedule
+      responses:
+        '201':
+          description: Berhasil dibuat
+  /attendance-sessions:
+    get:
+      tags: [Attendance]
+      summary: Daftar sesi absensi
+      operationId: listAttendanceSessions
+      responses:
+        '200':
+          description: Berhasil
+    post:
+      tags: [Attendance]
+      summary: Buat atau ambil sesi dari jadwal
+      operationId: createAttendanceSession
+      responses:
+        '201':
+          description: Sesi dibuat
+  /reports/subject-attendance:
+    get:
+      tags: [Reports]
+      summary: Ringkasan kehadiran per kelas untuk satu mapel
+      operationId: getSubjectAttendanceReport
+      responses:
+        '200':
+          description: Berhasil
+  /exports/attendance:
+    post:
+      tags: [Exports]
+      summary: Buat ekspor rekap kehadiran
+      operationId: createAttendanceExport
+      responses:
+        '202':
+          description: Ekspor diproses
+  /audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: Daftar audit log
+      operationId: listAuditLogs
+      responses:
+        '200':
+          description: Berhasil
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Unauthorized:
+      description: Token tidak valid atau kedaluwarsa
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    Role:
+      type: string
+      enum: [SUPER_ADMIN, TEACHER, HOMEROOM_TEACHER]
+    EntityStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    ErrorResponse:
+      type: object
+      required: [type, title, status, code, request_id]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+        detail:
+          type: string
+        request_id:
+          type: string
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 8
+    GoogleLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [id_token]
+      properties:
+        id_token:
+          type: string
+    RefreshTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    CurrentUser:
+      type: object
+      required: [id, email, name, roles, permissions]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            type: string
+    AuthTokenPair:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/CurrentUser'
+    Teacher:
+      type: object
+      required: [id, nip, full_name, email, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        nip:
+          type: string
+        full_name:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    TeacherCreate:
+      type: object
+      required: [nip, full_name, email]
+      properties:
+        nip:
+          type: string
+        full_name:
+          type: string
+        email:
+          type: string
+          format: email
+    Student:
+      type: object
+      required: [id, nis, full_name, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        nis:
+          type: string
+        full_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    StudentCreate:
+      type: object
+      required: [nis, full_name]
+      properties:
+        nis:
+          type: string
+        full_name:
+          type: string
+    PaginatedTeachers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Teacher'
+    PaginatedStudents:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Student'
+    AdminDashboard:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        total_students:
+          type: integer
+        total_teachers:
+          type: integer
+        attendance_rate_today:
+          type: number
+          minimum: 0
+          maximum: 100

@@ -16,6 +16,12 @@ coverage.html
 graphify
 graphify-out
 docs
+!apps/api/docs/
+apps/api/docs/docs.go
+apps/api/docs/swagger.json
+apps/api/docs/swagger.yaml
+!apps/api/docs/openapi.go
+!apps/api/docs/openapi.yaml
 .turbo
 .env.*.local
 docker/.env
