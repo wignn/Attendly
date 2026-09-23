@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "go build -v -o bin/server cmd/server/main.go && go build -v -o bin/worker cmd/worker/main.go",
+    "build": "go build -v -o bin/server cmd/server/main.go",
     "dev": "go run cmd/server/main.go",
     "test": "go test -v -race ./...",
     "lint": "command -v golangci-lint >/dev/null 2>&1 && golangci-lint run ./... || go vet ./...",

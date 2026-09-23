@@ -56,7 +56,7 @@ func TestRegisterAndLoginHandler(t *testing.T) {
 		JWTRefreshTTL: 7 * 24 * time.Hour,
 	}
 	maker := token.NewMaker(cfg.JWTSecret)
-	authSvc := service.NewAuthService(repo, maker, cfg, nil)
+	authSvc := service.NewAuthService(repo, maker, cfg)
 	handler := NewAuthHandler(authSvc)
 
 	// 1. Test Register

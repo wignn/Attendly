@@ -10,16 +10,14 @@ import (
 type Role string
 
 const (
-	RoleAdmin   Role = "ADMIN"
-	RoleMember  Role = "MEMBER"
-	RoleUser    Role = "USER"
-	RoleTeacher Role = "TEACHER"
-	RoleStudent Role = "STUDENT"
+	RoleAdmin  Role = "ADMIN"
+	RoleMember Role = "MEMBER"
+	RoleUser   Role = "USER"
 )
 
 func (r Role) IsValid() bool {
 	switch r {
-	case RoleAdmin, RoleMember, RoleUser, RoleTeacher, RoleStudent:
+	case RoleAdmin, RoleMember, RoleUser:
 		return true
 	default:
 		return false

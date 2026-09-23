@@ -11,6 +11,7 @@ type Config struct {
 	Env           string
 	AppName       string
 	DatabaseURL   string
+	RedisURL      string
 	RedisAddr     string
 	RedisPass     string
 	JWTSecret     string
@@ -32,6 +33,7 @@ func Load() *Config {
 
 	dbURL := getEnv("DATABASE_URL", "postgres://"+dbUser+":"+dbPass+"@"+dbHost+":"+dbPort+"/"+dbName+"?sslmode="+dbSSL)
 
+	redisURL := getEnv("REDIS_URL", "")
 	redisHost := getEnv("REDIS_HOST", "localhost")
 	redisPort := getEnv("REDIS_PORT", "6379")
 	redisPass := getEnv("REDIS_PASSWORD", "")
@@ -45,6 +47,7 @@ func Load() *Config {
 		Env:           env,
 		AppName:       appName,
 		DatabaseURL:   dbURL,
+		RedisURL:      redisURL,
 		RedisAddr:     redisHost + ":" + redisPort,
 		RedisPass:     redisPass,
 		JWTSecret:     jwtSecret,

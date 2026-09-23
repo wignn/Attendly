@@ -14,17 +14,15 @@ import (
 	"github.com/wignn/komas-api/internal/handler/http/middleware"
 	v1 "github.com/wignn/komas-api/internal/handler/http/v1"
 	"github.com/wignn/komas-api/internal/repository/postgres"
+	"github.com/wignn/komas-api/internal/repository/redis"
 	"github.com/wignn/komas-api/internal/service"
-	"github.com/wignn/komas-api/internal/worker"
 	"github.com/wignn/komas-api/pkg/logger"
 	"github.com/wignn/komas-api/pkg/token"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-	"github.com/hibiken/asynq"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
-
 
 func main() {
 	cfg := config.Load()
@@ -41,30 +39,23 @@ func main() {
 		appLogger.Info("PostgreSQL connection pool established")
 	}
 
-	redisOpt := asynq.RedisClientOpt{
-		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPass,
+	redisClient, err := redis.New(cfg.RedisURL, cfg.RedisAddr, cfg.RedisPass)
+	if err != nil {
+		appLogger.Warn("Redis connection failed (rate limiting / caching running in fallback mode)", "error", err)
+	} else {
+		defer redisClient.Close()
+		appLogger.Info("Redis client connected")
 	}
-	distributor := worker.NewRedisTaskDistributor(redisOpt)
 
 	tokenMaker := token.NewMaker(cfg.JWTSecret)
 	userRepo := postgres.NewUserRepo(dbPool)
-	classRepo := postgres.NewClassRepo(dbPool)
-	subjectRepo := postgres.NewSubjectRepo(dbPool)
-	studentRepo := postgres.NewStudentRepo(dbPool)
-	classSubjectRepo := postgres.NewClassSubjectRepo(dbPool)
-	attendanceRepo := postgres.NewAttendanceRepo(dbPool)
 
-	authService := service.NewAuthService(userRepo, tokenMaker, cfg, distributor)
+	authService := service.NewAuthService(userRepo, tokenMaker, cfg)
 	userService := service.NewUserService(userRepo)
-	academicService := service.NewAcademicService(classRepo, subjectRepo, studentRepo, classSubjectRepo)
-	attendanceService := service.NewAttendanceService(attendanceRepo, classSubjectRepo)
 
 	handlers := v1.Handlers{
-		Auth:       v1.NewAuthHandler(authService),
-		User:       v1.NewUserHandler(userService),
-		Academic:   v1.NewAcademicHandler(academicService),
-		Attendance: v1.NewAttendanceHandler(attendanceService),
+		Auth: v1.NewAuthHandler(authService),
+		User: v1.NewUserHandler(userService),
 	}
 	healthHandler := v1.NewHealthHandler()
 
@@ -82,7 +73,7 @@ func main() {
 	}))
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
-	v1.RegisterRoutes(r, handlers, tokenMaker)
+	v1.RegisterRoutes(r, handlers, tokenMaker, redisClient)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

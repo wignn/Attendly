@@ -6,30 +6,26 @@ import (
 
 	"github.com/wignn/komas-api/internal/config"
 	"github.com/wignn/komas-api/internal/domain"
-	"github.com/wignn/komas-api/internal/worker"
 	"github.com/wignn/komas-api/pkg/token"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
-	userRepo    domain.UserRepository
-	tokenMaker  *token.Maker
-	cfg         *config.Config
-	distributor worker.TaskDistributor
+	userRepo   domain.UserRepository
+	tokenMaker *token.Maker
+	cfg        *config.Config
 }
 
 func NewAuthService(
 	userRepo domain.UserRepository,
 	tokenMaker *token.Maker,
 	cfg *config.Config,
-	distributor worker.TaskDistributor,
 ) domain.AuthService {
 	return &AuthService{
-		userRepo:    userRepo,
-		tokenMaker:  tokenMaker,
-		cfg:         cfg,
-		distributor: distributor,
+		userRepo:   userRepo,
+		tokenMaker: tokenMaker,
+		cfg:        cfg,
 	}
 }
 
@@ -57,14 +53,6 @@ func (s *AuthService) Register(ctx context.Context, name, email, password string
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, err
-	}
-
-	// Enqueue asynchronous welcome email
-	if s.distributor != nil {
-		_ = s.distributor.DistributeWelcomeEmail(ctx, &worker.WelcomeEmailPayload{
-			Email: user.Email,
-			Name:  user.Name,
-		})
 	}
 
 	accessToken, err := s.tokenMaker.GenerateToken(user.ID, user.Email, user.Role, s.cfg.JWTAccessTTL)
