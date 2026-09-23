@@ -33,7 +33,7 @@ make dev
 
 - **Frontend Web:** [http://localhost:3000](http://localhost:3000)
 - **Backend API:** [http://localhost:8080](http://localhost:8080)
-- **Interactive Swagger Docs:** [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
+- **Interactive Swagger Docs:** [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html) (contract: `apps/api/docs/openapi.yaml`, served at `/swagger/openapi.yaml`)
 - **Local Mailpit:** [http://localhost:8025](http://localhost:8025)
 
 ## Available Commands

@@ -32,7 +32,7 @@ sqlc:
 	cd apps/api && sqlc generate
 
 swagger:
-	cd apps/api && swag init -g cmd/server/main.go -o docs --parseDependency --parseInternal
+	@echo "OpenAPI contract: apps/api/docs/openapi.yaml"
 
 clean:
 	pnpm clean
