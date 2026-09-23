@@ -1,0 +1,7 @@
+{
+  "extends": "@komas/tsconfig/react.json",
+  "compilerOptions": {
+    "baseUrl": "."
+  },
+  "include": ["src/**/*"]
+}

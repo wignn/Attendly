@@ -1,0 +1,115 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/wignn/komas-api/internal/config"
+	"github.com/wignn/komas-api/internal/handler/http/middleware"
+	v1 "github.com/wignn/komas-api/internal/handler/http/v1"
+	"github.com/wignn/komas-api/internal/repository/postgres"
+	"github.com/wignn/komas-api/internal/service"
+	"github.com/wignn/komas-api/internal/worker"
+	"github.com/wignn/komas-api/pkg/logger"
+	"github.com/wignn/komas-api/pkg/token"
+	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/hibiken/asynq"
+	httpSwagger "github.com/swaggo/http-swagger"
+)
+
+
+func main() {
+	cfg := config.Load()
+	appLogger := logger.New(cfg.Env)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	dbPool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		appLogger.Warn("Database connection failed (running in offline mode)", "error", err)
+	} else {
+		defer dbPool.Close()
+		appLogger.Info("PostgreSQL connection pool established")
+	}
+
+	redisOpt := asynq.RedisClientOpt{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPass,
+	}
+	distributor := worker.NewRedisTaskDistributor(redisOpt)
+
+	tokenMaker := token.NewMaker(cfg.JWTSecret)
+	userRepo := postgres.NewUserRepo(dbPool)
+	classRepo := postgres.NewClassRepo(dbPool)
+	subjectRepo := postgres.NewSubjectRepo(dbPool)
+	studentRepo := postgres.NewStudentRepo(dbPool)
+	classSubjectRepo := postgres.NewClassSubjectRepo(dbPool)
+	attendanceRepo := postgres.NewAttendanceRepo(dbPool)
+
+	authService := service.NewAuthService(userRepo, tokenMaker, cfg, distributor)
+	userService := service.NewUserService(userRepo)
+	academicService := service.NewAcademicService(classRepo, subjectRepo, studentRepo, classSubjectRepo)
+	attendanceService := service.NewAttendanceService(attendanceRepo, classSubjectRepo)
+
+	handlers := v1.Handlers{
+		Auth:       v1.NewAuthHandler(authService),
+		User:       v1.NewUserHandler(userService),
+		Academic:   v1.NewAcademicHandler(academicService),
+		Attendance: v1.NewAttendanceHandler(attendanceService),
+	}
+	healthHandler := v1.NewHealthHandler()
+
+	r := chi.NewRouter()
+	r.Use(chimw.RequestID)
+	r.Use(chimw.RealIP)
+	r.Use(chimw.Recoverer)
+	r.Use(middleware.StructuredLogger(appLogger))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8080", "*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
+	r.Get("/healthz", healthHandler.HealthCheck)
+	r.Get("/swagger/*", httpSwagger.WrapHandler)
+	v1.RegisterRoutes(r, handlers, tokenMaker)
+
+	server := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		appLogger.Info(fmt.Sprintf("Server started on port %s", cfg.Port))
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			appLogger.Error("Server error", "error", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	appLogger.Info("Shutting down server gracefully...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		appLogger.Error("Server forced to shutdown", "error", err)
+	}
+
+	appLogger.Info("Server stopped cleanly")
+}
