@@ -18,7 +18,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: 'stable'
           cache-dependency-path: apps/api/go.sum
 
       - name: Setup Node & pnpm
@@ -44,7 +44,27 @@ jobs:
       - name: Run Golang API Tests
         run: |
           cd apps/api
-          go test -v -race -coverprofile=coverage.out ./...
+          go test -v -race ./...
 
       - name: Build All Services
         run: pnpm turbo run build
+
+  notify-slack:
+    name: Notify Slack
+    needs: [lint-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send CI result to Slack
+        if: env.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v2
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "*CI Pipeline Alert*\n• Status: *${{ needs.lint-and-test.result }}*\n• Branch: `${{ github.ref_name }}`\n• Commit: `${{ github.sha }}`\n• Triggered by: `${{ github.actor }}`\n• Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
