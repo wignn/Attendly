@@ -11,8 +11,9 @@ import (
 )
 
 type Handlers struct {
-	Auth *AuthHandler
-	User *UserHandler
+	Auth       *AuthHandler
+	User       *UserHandler
+	Attendance *AttendanceReportHandler
 }
 
 func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client, userRepository domain.UserRepository) {
@@ -33,6 +34,16 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 			r.Get("/me", h.User.GetMe)
 			r.Get("/users/me", h.User.GetMe)
 			r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/users", h.User.ListUsers)
+			if h.Attendance != nil {
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/dashboard", h.Attendance.AdminDashboard)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/activities", h.Attendance.Activities)
+				r.With(middleware.RequireRole(domain.RoleTeacher)).Get("/teachers/me/dashboard", h.Attendance.TeacherDashboard)
+				r.With(middleware.RequireRole(domain.RoleHomeroomTeacher)).Get("/teachers/me/homeroom-dashboard", h.Attendance.HomeroomDashboard)
+				r.Get("/students/{student_id}/attendance-summary", h.Attendance.StudentSummary)
+				r.Get("/reports/subject-attendance", h.Attendance.SubjectAttendance)
+				r.Get("/reports/classes/{class_id}/attendance", h.Attendance.ClassAttendance)
+				r.With(middleware.RequireRole(domain.RoleHomeroomTeacher)).Get("/reports/homeroom/{class_id}", h.Attendance.HomeroomReport)
+			}
 		})
 	})
 }
