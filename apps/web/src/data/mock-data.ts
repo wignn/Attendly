@@ -3,7 +3,7 @@ export interface Teacher {
   name: string;
   nip: string;
   subject: string;
-  role: string; // "Wali Kelas 7B", "Wali Kelas 7A", atau "none"
+  role: string;
   status: "Aktif" | "Nonaktif";
 }
 
@@ -21,6 +21,7 @@ export interface Student {
   id: number;
   name: string;
   nis: string;
+  wa?: string;
   nisn?: string;
   status: "Aktif" | "Nonaktif";
 }
