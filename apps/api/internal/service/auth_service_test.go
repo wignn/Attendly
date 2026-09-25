@@ -132,6 +132,30 @@ func googleTestService(t *testing.T, user *domain.User) (*AuthService, *rsa.Priv
 	return svc, privateKey
 }
 
+func TestInactiveAccountCannotLoginOrRefresh(t *testing.T) {
+	password, err := bcrypt.GenerateFromPassword([]byte("strongpassword123"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := &domain.User{ID: uuid.New(), Email: "teacher@example.com", Password: string(password), Role: domain.RoleTeacher, IsActive: false}
+	repo := &authUserRepo{user: user}
+	sessions := &refreshSessionMemory{active: make(map[string]domain.RefreshSession)}
+	maker := token.NewMaker("secret-32-character-key-for-test-12345")
+	cfg := &config.Config{JWTAccessTTL: time.Minute, JWTRefreshTTL: time.Hour}
+	svc := NewAuthService(repo, maker, cfg, sessions)
+
+	if _, err := svc.Login(context.Background(), user.Email, "strongpassword123"); err == nil {
+		t.Fatal("expected inactive account login to fail")
+	}
+	refreshToken, err := maker.GenerateRefreshToken(user.ID, user.Email, domain.RoleTeacher, time.Hour, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RefreshToken(context.Background(), refreshToken); err == nil {
+		t.Fatal("expected inactive account refresh to fail")
+	}
+}
+
 func TestRegisterAlwaysAssignsTeacherRole(t *testing.T) {
 	for _, requestedRole := range []domain.Role{domain.RoleSuperAdmin, domain.RoleHomeroomTeacher, domain.RoleTeacher} {
 		t.Run(string(requestedRole), func(t *testing.T) {
@@ -168,8 +192,8 @@ func TestGoogleLoginRejectsInvalidClaimsAndUnknownEmail(t *testing.T) {
 		emailVerified bool
 		user          *domain.User
 	}{
-		{name: "wrong audience", audience: "another-client", emailVerified: true, user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Role: domain.RoleTeacher}},
-		{name: "unverified email", audience: "attendly-client", emailVerified: false, user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Role: domain.RoleTeacher}},
+		{name: "wrong audience", audience: "another-client", emailVerified: true, user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Role: domain.RoleTeacher, IsActive: true}},
+		{name: "unverified email", audience: "attendly-client", emailVerified: false, user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Role: domain.RoleTeacher, IsActive: true}},
 		{name: "unknown email", audience: "attendly-client", emailVerified: true},
 	}
 	for _, tt := range tests {
@@ -184,7 +208,7 @@ func TestGoogleLoginRejectsInvalidClaimsAndUnknownEmail(t *testing.T) {
 }
 
 func TestGoogleLoginAcceptsRegisteredVerifiedUser(t *testing.T) {
-	user := &domain.User{ID: uuid.New(), Email: "teacher@example.com", Name: "Teacher", Role: domain.RoleTeacher}
+	user := &domain.User{ID: uuid.New(), Email: "teacher@example.com", Name: "Teacher", Role: domain.RoleTeacher, IsActive: true}
 	svc, key := googleTestService(t, user)
 	idToken := googleTestToken(t, key, "test-key", "attendly-client", true)
 	tokens, err := svc.LoginWithGoogle(context.Background(), idToken)
@@ -201,7 +225,7 @@ func TestLogoutRevokesRefreshSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := &authUserRepo{user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Name: "Teacher", Password: string(password), Role: domain.RoleTeacher}}
+	repo := &authUserRepo{user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Name: "Teacher", Password: string(password), Role: domain.RoleTeacher, IsActive: true}}
 	sessions := &refreshSessionMemory{active: make(map[string]domain.RefreshSession)}
 	maker := token.NewMaker("secret-32-character-key-for-test-12345")
 	cfg := &config.Config{JWTAccessTTL: time.Minute, JWTRefreshTTL: time.Hour}
@@ -224,7 +248,7 @@ func TestRefreshRejectsRevokedToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repo := &authUserRepo{user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Name: "Teacher", Password: string(password), Role: domain.RoleTeacher}}
+	repo := &authUserRepo{user: &domain.User{ID: uuid.New(), Email: "teacher@example.com", Name: "Teacher", Password: string(password), Role: domain.RoleTeacher, IsActive: true}}
 	sessions := &refreshSessionMemory{active: make(map[string]domain.RefreshSession)}
 	maker := token.NewMaker("secret-32-character-key-for-test-12345")
 	cfg := &config.Config{JWTAccessTTL: time.Minute, JWTRefreshTTL: time.Hour}

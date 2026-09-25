@@ -50,6 +50,17 @@ func (m *mockUserRepo) List(ctx context.Context, offset, limit int32) ([]*domain
 func (m *mockUserRepo) Update(ctx context.Context, u *domain.User) error { return nil }
 func (m *mockUserRepo) Delete(ctx context.Context, id uuid.UUID) error   { return nil }
 
+func TestAuthTokenResponseReturnsAllRolesAndUnionPermissions(t *testing.T) {
+	user := &domain.User{Role: domain.RoleTeacher, Roles: []domain.Role{domain.RoleTeacher, domain.RoleHomeroomTeacher}}
+	got := toAuthTokenResponse(&domain.AuthTokens{User: user})
+	if len(got.User.Roles) != 2 || got.User.Roles[1] != domain.RoleHomeroomTeacher {
+		t.Fatalf("expected both roles, got %#v", got.User.Roles)
+	}
+	if len(got.User.Permissions) != 4 || got.User.Permissions[2] != "students:read" || got.User.Permissions[3] != "classes:read" {
+		t.Fatalf("expected union of role permissions, got %#v", got.User.Permissions)
+	}
+}
+
 func TestRegisterRejectsCallerSelectedRole(t *testing.T) {
 	repo := &mockUserRepo{users: make(map[string]*domain.User)}
 	cfg := &config.Config{
@@ -193,7 +204,7 @@ func TestRefreshRejectsAccessToken(t *testing.T) {
 func TestGetMeReturnsCurrentUserContract(t *testing.T) {
 	userID := uuid.New()
 	repo := &mockUserRepo{users: map[string]*domain.User{
-		"alice@enterprise.com": {ID: userID, Email: "alice@enterprise.com", Name: "Alice", Password: "do-not-return", Role: domain.RoleHomeroomTeacher},
+		"alice@enterprise.com": {ID: userID, Email: "alice@enterprise.com", Name: "Alice", Password: "do-not-return", Role: domain.RoleTeacher, Roles: []domain.Role{domain.RoleTeacher, domain.RoleHomeroomTeacher}, IsActive: true},
 	}}
 	maker := token.NewMaker("secret-32-character-key-for-test-12345")
 	accessToken, err := maker.GenerateToken(userID, "alice@enterprise.com", domain.RoleTeacher, time.Minute)
@@ -201,7 +212,7 @@ func TestGetMeReturnsCurrentUserContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	router := chi.NewRouter()
-	RegisterRoutes(router, Handlers{User: NewUserHandler(service.NewUserService(repo))}, maker, nil)
+	RegisterRoutes(router, Handlers{User: NewUserHandler(service.NewUserService(repo))}, maker, nil, repo)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	rec := httptest.NewRecorder()
@@ -226,10 +237,10 @@ func TestGetMeReturnsCurrentUserContract(t *testing.T) {
 	if response.Data.ID != userID.String() || response.Data.Email != "alice@enterprise.com" || response.Data.Name != "Alice" {
 		t.Fatalf("unexpected current user identity: %#v", response.Data)
 	}
-	if len(response.Data.Roles) != 1 || response.Data.Roles[0] != domain.RoleHomeroomTeacher {
-		t.Fatalf("/me did not use the role currently stored in the repository: %#v", response.Data.Roles)
+	if len(response.Data.Roles) != 2 || response.Data.Roles[0] != domain.RoleTeacher || response.Data.Roles[1] != domain.RoleHomeroomTeacher {
+		t.Fatalf("/me did not use all roles currently stored in the repository: %#v", response.Data.Roles)
 	}
-	if len(response.Data.Permissions) == 0 || response.Data.Password != "" || response.Data.Role != "" {
+	if len(response.Data.Permissions) != 4 || response.Data.Permissions[2] != "students:read" || response.Data.Permissions[3] != "classes:read" || response.Data.Password != "" || response.Data.Role != "" {
 		t.Fatalf("/me response missing permissions or exposing internal fields: %#v", response.Data)
 	}
 	if strings.Contains(rec.Body.String(), "do-not-return") {

@@ -43,15 +43,32 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		ID:          user.ID.String(),
 		Email:       user.Email,
 		Name:        user.Name,
-		Roles:       []domain.Role{user.Role},
-		Permissions: permissionsForRole(user.Role),
+		Roles:       user.RoleSet(),
+		Permissions: permissionsForRoles(user.RoleSet()),
 	})
+}
+
+func permissionsForRoles(roles []domain.Role) []string {
+	permissions := make(map[string]struct{})
+	for _, role := range roles {
+		if role == domain.RoleSuperAdmin {
+			return []string{"*"}
+		}
+		for _, permission := range permissionsForRole(role) {
+			permissions[permission] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(permissions))
+	for _, permission := range []string{"attendance:read", "attendance:write", "students:read", "classes:read"} {
+		if _, ok := permissions[permission]; ok {
+			result = append(result, permission)
+		}
+	}
+	return result
 }
 
 func permissionsForRole(role domain.Role) []string {
 	switch role {
-	case domain.RoleSuperAdmin:
-		return []string{"*"}
 	case domain.RoleHomeroomTeacher:
 		return []string{"attendance:read", "attendance:write", "students:read", "classes:read"}
 	case domain.RoleTeacher:

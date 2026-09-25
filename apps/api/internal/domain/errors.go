@@ -6,12 +6,13 @@ import (
 )
 
 var (
-	ErrNotFound          = errors.New("resource not found")
-	ErrConflict          = errors.New("resource already exists")
-	ErrUnauthorized      = errors.New("unauthorized")
-	ErrForbidden         = errors.New("forbidden access")
-	ErrValidation        = errors.New("validation failed")
-	ErrInternal          = errors.New("internal server error")
+	ErrNotFound           = errors.New("resource not found")
+	ErrConflict           = errors.New("resource already exists")
+	ErrUnauthorized       = errors.New("unauthorized")
+	ErrForbidden          = errors.New("forbidden access")
+	ErrValidation         = errors.New("validation failed")
+	ErrInvalidRole        = errors.New("invalid role")
+	ErrInternal           = errors.New("internal server error")
 	ErrInvalidCredentials = errors.New("invalid email or password")
 )
 

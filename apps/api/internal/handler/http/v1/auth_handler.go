@@ -55,8 +55,8 @@ func toAuthTokenResponse(tokens *domain.AuthTokens) authTokenResponse {
 			ID:          tokens.User.ID.String(),
 			Email:       tokens.User.Email,
 			Name:        tokens.User.Name,
-			Roles:       []domain.Role{tokens.User.Role},
-			Permissions: permissionsForRole(tokens.User.Role),
+			Roles:       tokens.User.RoleSet(),
+			Permissions: permissionsForRoles(tokens.User.RoleSet()),
 		},
 	}
 }

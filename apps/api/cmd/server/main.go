@@ -83,7 +83,7 @@ func main() {
 		_, _ = w.Write(docs.OpenAPI)
 	})
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/openapi.yaml")))
-	v1.RegisterRoutes(r, handlers, tokenMaker, redisClient)
+	v1.RegisterRoutes(r, handlers, tokenMaker, redisClient, userRepo)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

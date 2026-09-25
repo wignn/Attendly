@@ -15,7 +15,7 @@ type Handlers struct {
 	User *UserHandler
 }
 
-func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client) {
+func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client, userRepository domain.UserRepository) {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
 			if redisClient != nil {
@@ -29,7 +29,7 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 		})
 
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Authenticate(tokenMaker))
+			r.Use(middleware.Authenticate(tokenMaker, userRepository))
 			r.Get("/me", h.User.GetMe)
 			r.Get("/users/me", h.User.GetMe)
 			r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/users", h.User.ListUsers)

@@ -70,6 +70,7 @@ func (s *AuthService) Register(ctx context.Context, name, email, password string
 		Email:     email,
 		Password:  string(hashedPassword),
 		Name:      name,
+		IsActive:  true,
 		Role:      domain.RoleTeacher,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -88,7 +89,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 		return nil, domain.ErrInvalidCredentials
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil || !user.IsActive {
 		return nil, domain.ErrInvalidCredentials
 	}
 
@@ -96,12 +97,13 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 }
 
 func (s *AuthService) issueTokens(ctx context.Context, user *domain.User, familyID uuid.UUID) (*domain.AuthTokens, error) {
-	accessToken, err := s.tokenMaker.GenerateToken(user.ID, user.Email, user.Role, s.cfg.JWTAccessTTL)
+	roles := user.RoleSet()
+	accessToken, err := s.tokenMaker.GenerateTokenWithRoles(user.ID, user.Email, roles, s.cfg.JWTAccessTTL)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.tokenMaker.GenerateRefreshToken(user.ID, user.Email, user.Role, s.cfg.JWTRefreshTTL, familyID)
+	refreshToken, err := s.tokenMaker.GenerateRefreshTokenWithRoles(user.ID, user.Email, roles, s.cfg.JWTRefreshTTL, familyID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +148,7 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, idToken string) (*dom
 		return nil, domain.ErrUnauthorized
 	}
 	user, err := s.userRepo.GetByEmail(ctx, claims.Email)
-	if err != nil {
+	if err != nil || !user.IsActive {
 		return nil, domain.ErrInvalidCredentials
 	}
 	return s.issueTokens(ctx, user, uuid.New())
@@ -284,15 +286,16 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*d
 	}
 
 	user, err := s.userRepo.GetByID(ctx, claims.UserID)
-	if err != nil {
+	if err != nil || !user.IsActive {
 		return nil, domain.ErrUnauthorized
 	}
 
-	accessToken, err := s.tokenMaker.GenerateToken(user.ID, user.Email, user.Role, s.cfg.JWTAccessTTL)
+	roles := user.RoleSet()
+	accessToken, err := s.tokenMaker.GenerateTokenWithRoles(user.ID, user.Email, roles, s.cfg.JWTAccessTTL)
 	if err != nil {
 		return nil, err
 	}
-	newRefreshToken, err := s.tokenMaker.GenerateRefreshToken(user.ID, user.Email, user.Role, s.cfg.JWTRefreshTTL, familyID)
+	newRefreshToken, err := s.tokenMaker.GenerateRefreshTokenWithRoles(user.ID, user.Email, roles, s.cfg.JWTRefreshTTL, familyID)
 	if err != nil {
 		return nil, err
 	}

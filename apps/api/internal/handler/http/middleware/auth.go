@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/wignn/komas-api/internal/domain"
 	"github.com/wignn/komas-api/pkg/response"
 	"github.com/wignn/komas-api/pkg/token"
 )
@@ -12,8 +13,9 @@ import (
 type contextKey string
 
 const UserContextKey contextKey = "user_claims"
+const AuthenticatedUserContextKey contextKey = "authenticated_user"
 
-func Authenticate(maker *token.Maker) func(http.Handler) http.Handler {
+func Authenticate(maker *token.Maker, repository domain.UserRepository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -35,6 +37,16 @@ func Authenticate(maker *token.Maker) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), UserContextKey, claims)
+			if repository == nil {
+				response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Authentication user repository is unavailable", nil)
+				return
+			}
+			user, err := repository.GetByID(r.Context(), claims.UserID)
+			if err != nil || user == nil || !user.IsActive {
+				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or inactive account", nil)
+				return
+			}
+			ctx = context.WithValue(ctx, AuthenticatedUserContextKey, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -46,4 +58,12 @@ func GetUserClaims(ctx context.Context) *token.Claims {
 		return nil
 	}
 	return claims
+}
+
+func GetAuthenticatedUser(ctx context.Context) *domain.User {
+	user, ok := ctx.Value(AuthenticatedUserContextKey).(*domain.User)
+	if !ok {
+		return nil
+	}
+	return user
 }

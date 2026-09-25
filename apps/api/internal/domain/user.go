@@ -29,9 +29,44 @@ type User struct {
 	Email     string    `json:"email"`
 	Password  string    `json:"-"`
 	Name      string    `json:"name"`
-	Role      Role      `json:"role"`
+	IsActive  bool      `json:"is_active"`
+	Role      Role      `json:"role,omitempty"`
+	Roles     []Role    `json:"roles,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (u User) HasRole(role Role) bool {
+	if !role.IsValid() {
+		return false
+	}
+	for _, assignedRole := range u.Roles {
+		if assignedRole == role {
+			return true
+		}
+	}
+	return u.Role == role
+}
+
+func (u *User) SetRoles(roles []Role) {
+	u.Roles = append([]Role(nil), roles...)
+	if len(roles) > 0 {
+		u.Role = roles[0]
+	}
+}
+
+func (u User) RoleSet() []Role {
+	if len(u.Roles) > 0 {
+		return append([]Role(nil), u.Roles...)
+	}
+	if u.Role.IsValid() {
+		return []Role{u.Role}
+	}
+	return nil
+}
+
+type RoleRepository interface {
+	SetRoles(ctx context.Context, userID uuid.UUID, roles []Role) error
 }
 
 type UserRepository interface {
