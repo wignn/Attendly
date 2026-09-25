@@ -58,10 +58,12 @@ func main() {
 
 	authService := service.NewAuthService(userRepo, tokenMaker, cfg, refreshSessionRepo)
 	userService := service.NewUserService(userRepo)
+	reportService := service.NewAttendanceReportService(postgres.NewAttendanceReportRepo(dbPool))
 
 	handlers := v1.Handlers{
-		Auth: v1.NewAuthHandler(authService),
-		User: v1.NewUserHandler(userService),
+		Auth:       v1.NewAuthHandler(authService),
+		User:       v1.NewUserHandler(userService),
+		Attendance: v1.NewAttendanceReportHandler(reportService),
 	}
 	healthHandler := v1.NewHealthHandler()
 
