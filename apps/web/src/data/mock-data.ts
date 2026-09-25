@@ -3,7 +3,7 @@ export interface Teacher {
   name: string;
   nip: string;
   subject: string;
-  role: string; // "Wali Kelas 7B", "Wali Kelas 7A", atau "none"
+  role: string;
   status: "Aktif" | "Nonaktif";
 }
 
@@ -21,7 +21,8 @@ export interface Student {
   id: number;
   name: string;
   nis: string;
-  wa: string;
+  wa?: string;
+  nisn?: string;
   status: "Aktif" | "Nonaktif";
 }
 
@@ -57,33 +58,33 @@ export const initialClasses: ClassItem[] = [
 
 export const initialStudentsByClass: Record<string, Student[]> = {
   "7a": [
-    { id: 101, name: "Aditya Pratama", nis: "20260701", wa: "081298765431", status: "Aktif" },
-    { id: 102, name: "Alya Zahra", nis: "20260702", wa: "081298765432", status: "Aktif" },
-    { id: 103, name: "Bagas Saputra", nis: "20260703", wa: "081298765433", status: "Aktif" },
-    { id: 104, name: "Citra Kirana", nis: "20260704", wa: "081298765434", status: "Aktif" },
-    { id: 105, name: "Dimas Anggara", nis: "20260705", wa: "081298765435", status: "Aktif" },
+    { id: 101, name: "Aditya Pratama", nis: "20260701", nisn: "0081234501", status: "Aktif" },
+    { id: 102, name: "Alya Zahra", nis: "20260702", nisn: "0081234502", status: "Aktif" },
+    { id: 103, name: "Bagas Saputra", nis: "20260703", nisn: "0081234503", status: "Aktif" },
+    { id: 104, name: "Citra Kirana", nis: "20260704", nisn: "0081234504", status: "Aktif" },
+    { id: 105, name: "Dimas Anggara", nis: "20260705", nisn: "0081234505", status: "Aktif" },
   ],
   "7b": [
-    { id: 106, name: "Ahmad Fauzan", nis: "20260711", wa: "081311223341", status: "Aktif" },
-    { id: 107, name: "Bella Safitri", nis: "20260712", wa: "081311223342", status: "Aktif" },
-    { id: 108, name: "Candra Wijaya", nis: "20260713", wa: "081311223343", status: "Aktif" },
-    { id: 109, name: "Dewi Lestari", nis: "20260714", wa: "081311223344", status: "Aktif" },
+    { id: 106, name: "Ahmad Fauzan", nis: "20260711", nisn: "0081234511", status: "Aktif" },
+    { id: 107, name: "Bella Safitri", nis: "20260712", nisn: "0081234512", status: "Aktif" },
+    { id: 108, name: "Candra Wijaya", nis: "20260713", nisn: "0081234513", status: "Aktif" },
+    { id: 109, name: "Dewi Lestari", nis: "20260714", nisn: "0081234514", status: "Aktif" },
   ],
   "7c": [
-    { id: 110, name: "Farhan Maulana", nis: "20260721", wa: "081566778811", status: "Aktif" },
-    { id: 111, name: "Gita Permata", nis: "20260722", wa: "081566778812", status: "Aktif" },
-    { id: 112, name: "Hendra Gunawan", nis: "20260723", wa: "081566778813", status: "Aktif" },
-    { id: 113, name: "Indah Puspita", nis: "20260724", wa: "081566778814", status: "Aktif" },
+    { id: 110, name: "Farhan Maulana", nis: "20260721", nisn: "0081234521", status: "Aktif" },
+    { id: 111, name: "Gita Permata", nis: "20260722", nisn: "0081234522", status: "Aktif" },
+    { id: 112, name: "Hendra Gunawan", nis: "20260723", nisn: "0081234523", status: "Aktif" },
+    { id: 113, name: "Indah Puspita", nis: "20260724", nisn: "0081234524", status: "Aktif" },
   ],
   "8a": [
-    { id: 201, name: "Salwa Alifa", nis: "20250801", wa: "081233445511", status: "Aktif" },
-    { id: 202, name: "Taufik Hidayat", nis: "20250802", wa: "081233445512", status: "Aktif" },
-    { id: 203, name: "Umar Bakri", nis: "20250803", wa: "081233445513", status: "Aktif" },
+    { id: 201, name: "Salwa Alifa", nis: "20250801", nisn: "0071234501", status: "Aktif" },
+    { id: 202, name: "Taufik Hidayat", nis: "20250802", nisn: "0071234502", status: "Aktif" },
+    { id: 203, name: "Umar Bakri", nis: "20250803", nisn: "0071234503", status: "Aktif" },
   ],
   "9a": [
-    { id: 301, name: "Wahyu Ramadhan", nis: "20240901", wa: "081399881122", status: "Aktif" },
-    { id: 302, name: "Yuliana Putri", nis: "20240902", wa: "081399881123", status: "Aktif" },
-    { id: 303, name: "Zaki Mubarak", nis: "20240903", wa: "081399881124", status: "Aktif" },
+    { id: 301, name: "Wahyu Ramadhan", nis: "20240901", nisn: "0061234501", status: "Aktif" },
+    { id: 302, name: "Yuliana Putri", nis: "20240902", nisn: "0061234502", status: "Aktif" },
+    { id: 303, name: "Zaki Mubarak", nis: "20240903", nisn: "0061234503", status: "Aktif" },
   ],
 };
 
