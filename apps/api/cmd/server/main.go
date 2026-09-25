@@ -16,6 +16,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 	"github.com/wignn/komas-api/docs"
 	"github.com/wignn/komas-api/internal/config"
+	"github.com/wignn/komas-api/internal/domain"
 	"github.com/wignn/komas-api/internal/handler/http/middleware"
 	v1 "github.com/wignn/komas-api/internal/handler/http/v1"
 	"github.com/wignn/komas-api/internal/repository/postgres"
@@ -50,8 +51,12 @@ func main() {
 
 	tokenMaker := token.NewMaker(cfg.JWTSecret)
 	userRepo := postgres.NewUserRepo(dbPool)
+	var refreshSessionRepo domain.RefreshSessionRepository
+	if dbPool != nil {
+		refreshSessionRepo = postgres.NewRefreshSessionRepo(dbPool)
+	}
 
-	authService := service.NewAuthService(userRepo, tokenMaker, cfg)
+	authService := service.NewAuthService(userRepo, tokenMaker, cfg, refreshSessionRepo)
 	userService := service.NewUserService(userRepo)
 
 	handlers := v1.Handlers{

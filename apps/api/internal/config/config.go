@@ -2,24 +2,30 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	Port          string
-	Env           string
-	AppName       string
-	DatabaseURL   string
-	RedisURL      string
-	RedisAddr     string
-	RedisPass     string
-	JWTSecret     string
-	JWTAccessTTL  time.Duration
-	JWTRefreshTTL time.Duration
+	Port           string
+	Env            string
+	AppName        string
+	DatabaseURL    string
+	RedisURL       string
+	RedisAddr      string
+	RedisPass      string
+	JWTSecret      string
+	JWTAccessTTL   time.Duration
+	JWTRefreshTTL  time.Duration
+	GoogleClientID string
 }
 
 func Load() *Config {
+	loadProjectEnvFile()
+
 	port := getEnv("PORT", "8080")
 	env := getEnv("ENV", "development")
 	appName := getEnv("APP_NAME", "komas-api")
@@ -43,17 +49,39 @@ func Load() *Config {
 	refreshTTLDays, _ := strconv.Atoi(getEnv("JWT_REFRESH_TTL_DAYS", "7"))
 
 	return &Config{
-		Port:          port,
-		Env:           env,
-		AppName:       appName,
-		DatabaseURL:   dbURL,
-		RedisURL:      redisURL,
-		RedisAddr:     redisHost + ":" + redisPort,
-		RedisPass:     redisPass,
-		JWTSecret:     jwtSecret,
-		JWTAccessTTL:  time.Duration(accessTTLMinutes) * time.Minute,
-		JWTRefreshTTL: time.Duration(refreshTTLDays) * 24 * time.Hour,
+		Port:           port,
+		Env:            env,
+		AppName:        appName,
+		DatabaseURL:    dbURL,
+		RedisURL:       redisURL,
+		RedisAddr:      redisHost + ":" + redisPort,
+		RedisPass:      redisPass,
+		JWTSecret:      jwtSecret,
+		JWTAccessTTL:   time.Duration(accessTTLMinutes) * time.Minute,
+		JWTRefreshTTL:  time.Duration(refreshTTLDays) * 24 * time.Hour,
+		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
 	}
+}
+
+func loadProjectEnvFile() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+
+	for dir := cwd; ; dir = filepath.Dir(dir) {
+		if err := loadEnvFile(filepath.Join(dir, ".env")); err == nil {
+			return
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return
+		}
+	}
+}
+
+func loadEnvFile(path string) error {
+	return godotenv.Load(path)
 }
 
 func getEnv(key, defaultVal string) string {

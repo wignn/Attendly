@@ -28,7 +28,7 @@ func Authenticate(maker *token.Maker) func(http.Handler) http.Handler {
 				return
 			}
 
-			claims, err := maker.VerifyToken(parts[1])
+			claims, err := maker.VerifyAccessToken(parts[1])
 			if err != nil {
 				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid or expired token", nil)
 				return
