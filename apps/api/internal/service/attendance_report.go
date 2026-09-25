@@ -22,10 +22,14 @@ func (s *AttendanceReportService) AdminDashboard(ctx context.Context, user *doma
 		return domain.AdminDashboard{}, domain.ErrForbidden
 	}
 	dashboard, err := s.repo.AdminDashboard(ctx)
-	if err == nil {
-		dashboard.AttendanceRate = dashboard.Attendance.AttendanceRate()
+	if err != nil {
+		return domain.AdminDashboard{}, err
 	}
-	return dashboard, err
+	if err := s.repo.RecordActivity(ctx, user.ID, "VIEW", "ADMIN_DASHBOARD", user.ID); err != nil {
+		return domain.AdminDashboard{}, err
+	}
+	dashboard.AttendanceRate = dashboard.Attendance.AttendanceRate()
+	return dashboard, nil
 }
 
 func (s *AttendanceReportService) TeacherDashboard(ctx context.Context, user *domain.User) (domain.TeacherDashboard, error) {
@@ -33,10 +37,14 @@ func (s *AttendanceReportService) TeacherDashboard(ctx context.Context, user *do
 		return domain.TeacherDashboard{}, domain.ErrForbidden
 	}
 	dashboard, err := s.repo.TeacherDashboard(ctx, user.ID)
-	if err == nil {
-		dashboard.Rate = dashboard.Attendance.AttendanceRate()
+	if err != nil {
+		return domain.TeacherDashboard{}, err
 	}
-	return dashboard, err
+	if err := s.repo.RecordActivity(ctx, user.ID, "VIEW", "TEACHER_DASHBOARD", user.ID); err != nil {
+		return domain.TeacherDashboard{}, err
+	}
+	dashboard.Rate = dashboard.Attendance.AttendanceRate()
+	return dashboard, nil
 }
 
 func (s *AttendanceReportService) HomeroomDashboard(ctx context.Context, user *domain.User) (domain.TeacherDashboard, error) {
@@ -44,10 +52,14 @@ func (s *AttendanceReportService) HomeroomDashboard(ctx context.Context, user *d
 		return domain.TeacherDashboard{}, domain.ErrForbidden
 	}
 	dashboard, err := s.repo.HomeroomDashboard(ctx, user.ID)
-	if err == nil {
-		dashboard.Rate = dashboard.Attendance.AttendanceRate()
+	if err != nil {
+		return domain.TeacherDashboard{}, err
 	}
-	return dashboard, err
+	if err := s.repo.RecordActivity(ctx, user.ID, "VIEW", "HOMEROOM_DASHBOARD", user.ID); err != nil {
+		return domain.TeacherDashboard{}, err
+	}
+	dashboard.Rate = dashboard.Attendance.AttendanceRate()
+	return dashboard, nil
 }
 
 func (s *AttendanceReportService) StudentSummary(ctx context.Context, user *domain.User, studentID uuid.UUID) (domain.StudentAttendanceSummary, error) {
@@ -70,10 +82,14 @@ func (s *AttendanceReportService) StudentSummary(ctx context.Context, user *doma
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.StudentAttendanceSummary{}, domain.ErrNotFound
 	}
-	if err == nil {
-		summary.Rate = summary.Counts.AttendanceRate()
+	if err != nil {
+		return domain.StudentAttendanceSummary{}, err
 	}
-	return summary, err
+	if err := s.repo.RecordActivity(ctx, user.ID, "VIEW", "STUDENT_ATTENDANCE_SUMMARY", studentID); err != nil {
+		return domain.StudentAttendanceSummary{}, err
+	}
+	summary.Rate = summary.Counts.AttendanceRate()
+	return summary, nil
 }
 
 func (s *AttendanceReportService) SubjectClasses(ctx context.Context, user *domain.User, subjectID uuid.UUID, page, perPage int32) ([]domain.SubjectClassReport, int64, error) {
@@ -89,11 +105,21 @@ func (s *AttendanceReportService) SubjectClasses(ctx context.Context, user *doma
 			return nil, 0, domain.ErrForbidden
 		}
 	}
-	teacherID := user.ID
-	if user.HasRole(domain.RoleSuperAdmin) {
-		teacherID = uuid.Nil
+	classes, total, err := s.repo.SubjectClasses(ctx, subjectID, reportTeacherScope(user), page, perPage)
+	if err != nil {
+		return nil, 0, err
 	}
-	return s.repo.SubjectClasses(ctx, subjectID, teacherID, page, perPage)
+	if err := s.repo.RecordActivity(ctx, user.ID, "VIEW", "SUBJECT_ATTENDANCE_REPORT", subjectID); err != nil {
+		return nil, 0, err
+	}
+	return classes, total, nil
+}
+
+func reportTeacherScope(user *domain.User) uuid.UUID {
+	if user.HasRole(domain.RoleSuperAdmin) {
+		return uuid.Nil
+	}
+	return user.ID
 }
 
 func (s *AttendanceReportService) ClassAttendance(ctx context.Context, user *domain.User, classID, subjectID uuid.UUID, page, perPage int32) (domain.ClassAttendanceReport, int64, error) {
@@ -116,7 +142,14 @@ func (s *AttendanceReportService) ClassAttendance(ctx context.Context, user *dom
 			return domain.ClassAttendanceReport{}, 0, domain.ErrForbidden
 		}
 	}
-	return s.repo.ClassAttendance(ctx, classID, subjectID, page, perPage)
+	report, total, err := s.repo.ClassAttendance(ctx, classID, subjectID, page, perPage)
+	if err != nil {
+		return domain.ClassAttendanceReport{}, 0, err
+	}
+	if err := s.repo.RecordActivity(ctx, user.ID, "VIEW", "CLASS_ATTENDANCE_REPORT", classID); err != nil {
+		return domain.ClassAttendanceReport{}, 0, err
+	}
+	return report, total, nil
 }
 
 func (s *AttendanceReportService) HomeroomReport(ctx context.Context, user *domain.User, classID uuid.UUID, page, perPage int32) (domain.ClassAttendanceReport, int64, error) {
@@ -132,11 +165,14 @@ func (s *AttendanceReportService) HomeroomReport(ctx context.Context, user *doma
 			return domain.ClassAttendanceReport{}, 0, domain.ErrForbidden
 		}
 	}
-	teacherID := user.ID
-	if user.HasRole(domain.RoleSuperAdmin) {
-		teacherID = uuid.Nil
+	report, total, err := s.repo.HomeroomReport(ctx, classID, reportTeacherScope(user), page, perPage)
+	if err != nil {
+		return domain.ClassAttendanceReport{}, 0, err
 	}
-	return s.repo.HomeroomReport(ctx, classID, teacherID, page, perPage)
+	if err := s.repo.RecordActivity(ctx, user.ID, "VIEW", "HOMEROOM_REPORT", classID); err != nil {
+		return domain.ClassAttendanceReport{}, 0, err
+	}
+	return report, total, nil
 }
 
 func (s *AttendanceReportService) Activities(ctx context.Context, user *domain.User, page, perPage int32) ([]domain.Activity, int64, error) {
