@@ -18,7 +18,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["GOCACHE", "LOCALAPPDATA"]
     },
     "clean": {
       "cache": false

@@ -32,3 +32,4 @@ docker/.env
 *.swo
 .DS_Store
 .superpowers/
+.docs/superpowers

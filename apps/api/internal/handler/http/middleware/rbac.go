@@ -10,14 +10,18 @@ import (
 func RequireRole(allowedRoles ...domain.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims := GetUserClaims(r.Context())
-			if claims == nil {
+			if GetUserClaims(r.Context()) == nil {
 				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Unauthorized", nil)
 				return
 			}
 
+			user := GetAuthenticatedUser(r.Context())
+			if user == nil {
+				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authenticated user is unavailable", nil)
+				return
+			}
 			for _, role := range allowedRoles {
-				if claims.Role == role {
+				if user.HasRole(role) {
 					next.ServeHTTP(w, r)
 					return
 				}
