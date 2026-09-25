@@ -73,7 +73,7 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.StructuredLogger(appLogger))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8080", "*"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8080","https://attendly-api-three.vercel.app", "*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"},
 		AllowCredentials: true,

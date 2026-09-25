@@ -8,7 +8,7 @@ info:
     Peran pengguna: SUPER_ADMIN, TEACHER, dan HOMEROOM_TEACHER.
     Semua waktu memakai ISO 8601; zona sekolah Asia/Jakarta.
 servers:
-  - url: https://api.absenku.example.com/api/v1
+  - url: https://attendly-api-three.vercel.app/v1
     description: Production
   - url: http://localhost:8080/api/v1
     description: Local development
@@ -645,10 +645,12 @@ components:
           type: string
     SubjectClassReport:
       type: object
-      required: [class, counts, attendance_rate]
+      required: [class, subject, counts, attendance_rate]
       properties:
         class:
           $ref: '#/components/schemas/ClassRecord'
+        subject:
+          $ref: '#/components/schemas/SubjectRecord'
         counts:
           $ref: '#/components/schemas/AttendanceCounts'
         attendance_rate:
