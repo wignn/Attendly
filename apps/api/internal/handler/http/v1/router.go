@@ -14,6 +14,7 @@ type Handlers struct {
 	Auth       *AuthHandler
 	User       *UserHandler
 	Attendance *AttendanceReportHandler
+	Student    *StudentHandler
 }
 
 func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client, userRepository domain.UserRepository) {
@@ -34,6 +35,15 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 			r.Get("/me", h.User.GetMe)
 			r.Get("/users/me", h.User.GetMe)
 			r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/users", h.User.ListUsers)
+			if h.Student != nil {
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students", h.Student.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/students", h.Student.Create)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students/{student_id}", h.Student.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/students/{student_id}", h.Student.Update)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/students/{student_id}", h.Student.Delete)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students/{student_id}/enrollments", h.Student.Enrollments)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/students/{student_id}/enrollments", h.Student.Transfer)
+			}
 			if h.Attendance != nil {
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/dashboard", h.Attendance.AdminDashboard)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/activities", h.Attendance.Activities)

@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: AbsenKu API
   version: 1.0.0
@@ -198,18 +198,55 @@ paths:
     get:
       tags: [Students]
       summary: Daftar siswa
+      description: Hanya SUPER_ADMIN. Siswa terhapus lunak tidak disertakan kecuali include_deleted=true.
       operationId: listStudents
+      x-required-roles: [SUPER_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: search
+          in: query
+          description: Cari berdasarkan NIS, NISN, atau nama lengkap.
+          schema: {type: string}
+        - name: class_id
+          in: query
+          description: Filter menurut kelas saat ini.
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - name: status
+          in: query
+          schema: {type: string, enum: [ACTIVE, INACTIVE]}
+        - name: include_deleted
+          in: query
+          description: Sertakan siswa yang dihapus lunak.
+          schema: {type: boolean, default: false}
+        - name: sort_by
+          in: query
+          schema: {type: string, enum: [nis, full_name, class_name, created_at], default: created_at}
+        - name: sort_order
+          in: query
+          schema: {type: string, enum: [asc, desc], default: asc}
       responses:
         '200':
-          description: Berhasil
+          description: Daftar siswa dan metadata pagination
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedStudents'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     post:
       tags: [Students]
       summary: Tambah siswa
+      description: Hanya SUPER_ADMIN. Siswa baru aktif; effective_on yang tidak diberikan memakai tanggal hari ini di Asia/Jakarta.
       operationId: createStudent
+      x-required-roles: [SUPER_ADMIN]
       requestBody:
         required: true
         content:
@@ -218,11 +255,178 @@ paths:
               $ref: '#/components/schemas/StudentCreate'
       responses:
         '201':
-          description: Berhasil dibuat
+          description: Siswa berhasil dibuat
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Student'
+                $ref: '#/components/schemas/StudentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: NIS atau NISN sudah digunakan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /students/{student_id}:
+    parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+    get:
+      tags: [Students]
+      summary: Ambil detail siswa
+      description: Hanya SUPER_ADMIN. Siswa terhapus lunak tidak ditemukan.
+      operationId: getStudent
+      x-required-roles: [SUPER_ADMIN]
+      responses:
+        '200':
+          description: Detail siswa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags: [Students]
+      summary: Perbarui data atau status siswa
+      description: Hanya SUPER_ADMIN. Perubahan kelas harus dilakukan melalui operasi transfer enrollment.
+      operationId: updateStudent
+      x-required-roles: [SUPER_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentUpdate'
+      responses:
+        '200':
+          description: Siswa berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: NIS atau NISN sudah digunakan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Students]
+      summary: Hapus lunak siswa
+      description: Hanya SUPER_ADMIN. Menandai siswa tidak aktif dan mengisi deleted_at; rekaman siswa dan kehadiran dipertahankan.
+      operationId: deleteStudent
+      x-required-roles: [SUPER_ADMIN]
+      responses:
+        '200':
+          description: Siswa berhasil dihapus lunak
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentDeleteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /students/{student_id}/enrollments:
+    parameters:
+      - name: student_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+    get:
+      tags: [Students]
+      summary: Ambil riwayat enrollment kelas siswa
+      description: Hanya SUPER_ADMIN. Mengembalikan enrollment secara kronologis dari yang terlama ke terbaru.
+      operationId: listStudentEnrollments
+      x-required-roles: [SUPER_ADMIN]
+      responses:
+        '200':
+          description: Riwayat enrollment siswa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentEnrollmentHistoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Students]
+      summary: Pindahkan siswa ke kelas lain
+      description: Hanya SUPER_ADMIN. effective_on menerima YYYY-MM-DD; jika tidak diberikan tanggal hari ini di Asia/Jakarta digunakan. Tanggal masa depan ditolak; tanggal yang sama dengan awal enrollment berjalan diperbolehkan.
+      operationId: transferStudentEnrollment
+      x-required-roles: [SUPER_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentTransfer'
+      responses:
+        '201':
+          description: Enrollment berhasil dipindahkan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Transfer bentrok dengan riwayat enrollment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /classes:
     get:
       tags: [Classes]
@@ -522,6 +726,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    InternalServerError:
+      description: Kesalahan internal saat memproses permintaan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
   parameters:
     Page:
       name: page
@@ -632,9 +842,9 @@ components:
         name:
           type: string
         homeroom_teacher_id:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Uuid'
-          nullable: true
+            - type: 'null'
     SubjectRecord:
       type: object
       required: [id, name]
@@ -664,9 +874,9 @@ components:
         class:
           $ref: '#/components/schemas/ClassRecord'
         subject:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/SubjectRecord'
-          nullable: true
+            - type: 'null'
         counts:
           $ref: '#/components/schemas/AttendanceCounts'
         attendance_rate:
@@ -684,9 +894,9 @@ components:
         id:
           $ref: '#/components/schemas/Uuid'
         actor_id:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Uuid'
-          nullable: true
+            - type: 'null'
         action:
           type: string
         entity:
@@ -953,24 +1163,131 @@ components:
           format: email
     Student:
       type: object
-      required: [id, nis, full_name, status]
+      description: Data siswa untuk pengelolaan. Penghapusan lunak mengisi deleted_at dan membuat active false tanpa menghapus riwayat kehadiran.
+      required: [id, nis, full_name, class_id, current_class_name, status, created_at, updated_at]
       properties:
         id:
           $ref: '#/components/schemas/Uuid'
         nis:
           type: string
+        nisn:
+          type: [string, 'null']
         full_name:
+          type: string
+        class_id:
+          $ref: '#/components/schemas/Uuid'
+        current_class_name:
           type: string
         status:
           $ref: '#/components/schemas/EntityStatus'
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
     StudentCreate:
       type: object
-      required: [nis, full_name]
+      additionalProperties: false
+      required: [nis, full_name, class_id]
       properties:
         nis:
           type: string
+          minLength: 1
+          maxLength: 50
+          description: Nomor induk siswa yang unik.
+        nisn:
+          type: [string, 'null']
+          description: Nomor induk siswa nasional opsional dan unik jika diisi.
         full_name:
           type: string
+          minLength: 1
+          maxLength: 255
+        class_id:
+          $ref: '#/components/schemas/Uuid'
+        effective_on:
+          type: [string, 'null']
+          format: date
+          description: Tanggal mulai enrollment kelas (YYYY-MM-DD); bila dihilangkan memakai tanggal hari ini di Asia/Jakarta.
+    StudentUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        nis:
+          type: string
+          minLength: 1
+          maxLength: 50
+        nisn:
+          type: [string, 'null']
+          description: Jika tidak diberikan atau null, nilai NISN saat ini tidak berubah.
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          description: Status siswa aktif atau tidak aktif.
+    StudentTransfer:
+      type: object
+      additionalProperties: false
+      required: [class_id]
+      properties:
+        class_id:
+          $ref: '#/components/schemas/Uuid'
+        effective_on:
+          type: [string, 'null']
+          format: date
+          description: Tanggal berlakunya transfer (YYYY-MM-DD); bila dihilangkan memakai tanggal hari ini di Asia/Jakarta.
+    StudentEnrollment:
+      type: object
+      required: [id, student_id, class_id, class_name, valid_from, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        student_id:
+          $ref: '#/components/schemas/Uuid'
+        class_id:
+          $ref: '#/components/schemas/Uuid'
+        class_name:
+          type: string
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type: [string, 'null']
+          format: date
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    StudentResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Student'
+    StudentDeleteResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  $ref: '#/components/schemas/Uuid'
+    StudentEnrollmentHistoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/StudentEnrollment'
     PaginatedTeachers:
       type: object
       properties:
@@ -979,12 +1296,14 @@ components:
           items:
             $ref: '#/components/schemas/Teacher'
     PaginatedStudents:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Student'
+      allOf:
+        - $ref: '#/components/schemas/PaginatedEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Student'
     AdminDashboard:
       type: object
       properties:
