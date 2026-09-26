@@ -14,7 +14,7 @@ import (
 	"github.com/wignn/komas-api/internal/domain"
 )
 
-// These tests require a disposable database with migrations 000001–000007 applied.
+// These tests require a disposable database with migrations 000001–000008 applied.
 func studentTestDB(t *testing.T) (*pgxpool.Pool, context.Context, uuid.UUID, []uuid.UUID) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
