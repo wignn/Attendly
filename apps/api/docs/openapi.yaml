@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: AbsenKu API
   version: 1.0.0
@@ -273,31 +273,226 @@ paths:
       tags: [Teaching Assignments]
       summary: Daftar penugasan mengajar
       operationId: listTeachingAssignments
+      description: Super Admin melihat seluruh penugasan; guru hanya miliknya sendiri.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/TeacherFilter'
+        - $ref: '#/components/parameters/ClassFilter'
+        - $ref: '#/components/parameters/SubjectFilter'
+        - $ref: '#/components/parameters/AcademicYearFilter'
       responses:
         '200':
           description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTeachingAssignments'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Teaching Assignments]
       summary: Buat penugasan mengajar
       operationId: createTeachingAssignment
+      description: Super Admin; guru, kelas, mata pelajaran, dan tahun ajaran harus valid. Penugasan ganda ditolak.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeachingAssignmentWrite' }
       responses:
         '201':
           description: Berhasil dibuat
-  /schedules:
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeachingAssignmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+  /teachers/{teacher_id}/assignments:
     get:
-      tags: [Schedules]
-      summary: Daftar jadwal kelas
-      operationId: listSchedules
+      tags: [Teaching Assignments]
+      summary: Daftar penugasan seorang guru
+      operationId: listTeacherAssignments
+      description: Guru hanya dapat membuka penugasannya sendiri.
+      parameters:
+        - $ref: '#/components/parameters/TeacherId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/AcademicYearFilter'
       responses:
         '200':
           description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedTeachingAssignments' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /teaching-assignments/{assignment_id}:
+    parameters:
+      - $ref: '#/components/parameters/AssignmentId'
+    get:
+      tags: [Teaching Assignments]
+      summary: Detail penugasan mengajar
+      operationId: getTeachingAssignment
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeachingAssignmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Teaching Assignments]
+      summary: Ubah penugasan mengajar
+      operationId: updateTeachingAssignment
+      description: Super Admin; kirim satu atau lebih ID yang berubah. Perubahan identitas penugasan bersejarah ditolak.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeachingAssignmentUpdate' }
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeachingAssignmentResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+    delete:
+      tags: [Teaching Assignments]
+      summary: Nonaktifkan penugasan tanpa menghapus riwayat
+      operationId: deleteTeachingAssignment
+      responses:
+        '204': { description: Penugasan dinonaktifkan }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /schedules:
+    get:
+      tags: [Schedules]
+      summary: Daftar jadwal kelas berulang
+      operationId: listSchedules
+      description: Guru hanya melihat jadwal mengajarnya sendiri.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/TeacherFilter'
+        - $ref: '#/components/parameters/ClassFilter'
+        - $ref: '#/components/parameters/SubjectFilter'
+        - $ref: '#/components/parameters/AcademicYearFilter'
+        - $ref: '#/components/parameters/DayOfWeekFilter'
+        - $ref: '#/components/parameters/OnDateFilter'
+        - $ref: '#/components/parameters/ActiveFilter'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedSchedules' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Schedules]
-      summary: Tambah jadwal kelas
+      summary: Tambah jadwal kelas berulang
       operationId: createSchedule
+      description: Super Admin; bentrok jam guru atau kelas pada hari dan rentang tanggal yang sama ditolak.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleCreate' }
       responses:
         '201':
           description: Berhasil dibuat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /schedules/today:
+    get:
+      tags: [Schedules]
+      summary: Jadwal hari ini di zona Asia/Jakarta
+      operationId: listTodaySchedules
+      description: Memakai tanggal, hari, dan waktu Asia/Jakarta. Guru hanya melihat jadwal miliknya.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedSchedules' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /schedules/{schedule_id}:
+    parameters:
+      - $ref: '#/components/parameters/ScheduleId'
+    get:
+      tags: [Schedules]
+      summary: Detail jadwal kelas
+      operationId: getSchedule
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Schedules]
+      summary: Ubah jadwal berulang
+      operationId: updateSchedule
+      description: Sesi absensi historis tidak berubah.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleUpdate' }
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Schedules]
+      summary: Nonaktifkan jadwal berulang
+      operationId: deleteSchedule
+      responses:
+        '204': { description: Jadwal dinonaktifkan }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /attendance-sessions:
     get:
       tags: [Attendance]
@@ -522,7 +717,62 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: Data duplikat atau jadwal bentrok
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    UnprocessableEntity:
+      description: Data melanggar aturan bisnis
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
   parameters:
+    TeacherId:
+      name: teacher_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    AssignmentId:
+      name: assignment_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    ScheduleId:
+      name: schedule_id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    TeacherFilter:
+      name: teacher_id
+      in: query
+      schema: { $ref: '#/components/schemas/Uuid' }
+    ClassFilter:
+      name: class_id
+      in: query
+      schema: { $ref: '#/components/schemas/Uuid' }
+    SubjectFilter:
+      name: subject_id
+      in: query
+      schema: { $ref: '#/components/schemas/Uuid' }
+    AcademicYearFilter:
+      name: academic_year_id
+      in: query
+      schema: { $ref: '#/components/schemas/Uuid' }
+    DayOfWeekFilter:
+      name: day_of_week
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 7 }
+    OnDateFilter:
+      name: on_date
+      in: query
+      schema: { type: string, format: date }
+    ActiveFilter:
+      name: active
+      in: query
+      schema: { type: boolean }
     Page:
       name: page
       in: query
@@ -541,6 +791,104 @@ components:
         maximum: 100
         default: 20
   schemas:
+    TeachingAssignmentWrite:
+      type: object
+      additionalProperties: false
+      required: [teacher_id, class_id, subject_id, academic_year_id]
+      properties:
+        teacher_id: { $ref: '#/components/schemas/Uuid' }
+        class_id: { $ref: '#/components/schemas/Uuid' }
+        subject_id: { $ref: '#/components/schemas/Uuid' }
+        academic_year_id: { $ref: '#/components/schemas/Uuid' }
+    TeachingAssignmentUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        teacher_id: { $ref: '#/components/schemas/Uuid' }
+        class_id: { $ref: '#/components/schemas/Uuid' }
+        subject_id: { $ref: '#/components/schemas/Uuid' }
+        academic_year_id: { $ref: '#/components/schemas/Uuid' }
+    TeachingAssignmentRecord:
+      type: object
+      required: [id, teacher_id, class_id, subject_id, academic_year_id, active, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        teacher_id: { $ref: '#/components/schemas/Uuid' }
+        class_id: { $ref: '#/components/schemas/Uuid' }
+        subject_id: { $ref: '#/components/schemas/Uuid' }
+        academic_year_id: { $ref: '#/components/schemas/Uuid' }
+        active: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    TeachingAssignmentResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/TeachingAssignmentRecord' }
+    PaginatedTeachingAssignments:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/TeachingAssignmentRecord' }
+    ScheduleCreate:
+      type: object
+      additionalProperties: false
+      required: [teaching_assignment_id, day_of_week, starts_at, ends_at, effective_from]
+      properties:
+        teaching_assignment_id: { $ref: '#/components/schemas/Uuid' }
+        day_of_week: { type: integer, minimum: 1, maximum: 7, description: Senin=1 hingga Minggu=7 }
+        starts_at: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$' }
+        ends_at: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$' }
+        effective_from: { type: string, format: date }
+        effective_until: { type: [string, 'null'], format: date }
+    ScheduleUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        teaching_assignment_id: { $ref: '#/components/schemas/Uuid' }
+        day_of_week: { type: integer, minimum: 1, maximum: 7 }
+        starts_at: { type: string }
+        ends_at: { type: string }
+        effective_from: { type: string, format: date }
+        effective_until: { type: [string, 'null'], format: date }
+    ScheduleRecord:
+      type: object
+      required: [id, teaching_assignment_id, teacher_id, class_id, subject_id, academic_year_id, day_of_week, starts_at, ends_at, effective_from, active, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        teaching_assignment_id: { $ref: '#/components/schemas/Uuid' }
+        teacher_id: { $ref: '#/components/schemas/Uuid' }
+        class_id: { $ref: '#/components/schemas/Uuid' }
+        subject_id: { $ref: '#/components/schemas/Uuid' }
+        academic_year_id: { $ref: '#/components/schemas/Uuid' }
+        day_of_week: { type: integer, minimum: 1, maximum: 7 }
+        starts_at: { type: string }
+        ends_at: { type: string }
+        effective_from: { type: string, format: date }
+        effective_until: { type: [string, 'null'], format: date }
+        active: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    ScheduleResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ScheduleRecord' }
+    PaginatedSchedules:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ScheduleRecord' }
     SuccessEnvelope:
       type: object
       required: [success, message, data]
@@ -632,9 +980,9 @@ components:
         name:
           type: string
         homeroom_teacher_id:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Uuid'
-          nullable: true
+            - type: 'null'
     SubjectRecord:
       type: object
       required: [id, name]
@@ -662,9 +1010,9 @@ components:
         class:
           $ref: '#/components/schemas/ClassRecord'
         subject:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/SubjectRecord'
-          nullable: true
+            - type: 'null'
         counts:
           $ref: '#/components/schemas/AttendanceCounts'
         attendance_rate:
@@ -682,9 +1030,9 @@ components:
         id:
           $ref: '#/components/schemas/Uuid'
         actor_id:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Uuid'
-          nullable: true
+            - type: 'null'
         action:
           type: string
         entity:

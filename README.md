@@ -34,6 +34,7 @@ make dev
 - **Frontend Web:** [http://localhost:3000](http://localhost:3000)
 - **Backend API:** [http://localhost:8080](http://localhost:8080)
 - **Interactive Swagger Docs:** [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html) (contract: `apps/api/docs/openapi.yaml`, served at `/swagger/openapi.yaml`)
+- **ReDoc API Reference:** [http://localhost:8080/redoc](http://localhost:8080/redoc)
 - **Local Mailpit:** [http://localhost:8025](http://localhost:8025)
 
 ## Available Commands
@@ -50,4 +51,9 @@ make dev
 | `make migrate-up` | Execute PostgreSQL schema migrations |
 | `make migrate-down` | Rollback PostgreSQL schema migrations |
 | `make sqlc` | Generate type-safe Go database queries |
-```
+
+## Teacher assignments and class schedules (KOM-13)
+
+Migration `000007` creates an academic period for the current Asia/Jakarta semester and preserves existing teaching assignments. The optional `apps/api/db/seeds/kom13.sql` can be rerun to add the example 2026/2027 period without duplicating it. Academic-year management endpoints belong to KOM-10.
+
+Super Admin can create, update, and deactivate teaching assignments and recurring schedules under `/api/v1/teaching-assignments` and `/api/v1/schedules`. Teachers and homeroom teachers can read only their own records. `/api/v1/schedules/today` uses the Asia/Jakarta calendar date. Deactivating an assignment also deactivates its schedules; existing attendance sessions retain their recorded teacher, class, subject, and time.
