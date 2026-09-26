@@ -1164,7 +1164,7 @@ components:
     Student:
       type: object
       description: Data siswa untuk pengelolaan. Penghapusan lunak mengisi deleted_at dan membuat active false tanpa menghapus riwayat kehadiran.
-      required: [id, nis, full_name, class_id, current_class_name, active, created_at, updated_at]
+      required: [id, nis, full_name, class_id, current_class_name, status, created_at, updated_at]
       properties:
         id:
           $ref: '#/components/schemas/Uuid'
@@ -1178,8 +1178,8 @@ components:
           $ref: '#/components/schemas/Uuid'
         current_class_name:
           type: string
-        active:
-          type: boolean
+        status:
+          $ref: '#/components/schemas/EntityStatus'
         deleted_at:
           type: [string, 'null']
           format: date-time
