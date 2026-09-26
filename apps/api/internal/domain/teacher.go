@@ -25,7 +25,7 @@ type TeacherCreateInput struct {
 	FullName string `json:"full_name"`
 	Email    string `json:"email"`
 	Phone    string `json:"phone,omitempty"`
-	Password string `json:"password,omitempty"`
+	Password string `json:"-"`
 }
 
 type TeacherUpdateInput struct {

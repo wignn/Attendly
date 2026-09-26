@@ -30,7 +30,7 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
-  const { currentUser, activeRole, logout } = useAuthRole();
+  const { currentUser, activeRole, isAuthenticated, isLoading, logout } = useAuthRole();
 
   // Build navigation from all server-assigned roles; the client cannot grant roles.
   const navSections = React.useMemo(() => {
@@ -91,7 +91,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
       <aside
         className={`w-64 bg-[#0c3960] text-slate-300 flex flex-col shrink-0 min-h-screen z-50 transition-transform duration-300 fixed md:static inset-y-0 left-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        } shadow-xl md:shadow-none`}
+        } ${!isAuthenticated || isLoading ? "hidden" : ""} shadow-xl md:shadow-none`}
       >
         {/* Brand Header */}
         <div className="p-5 flex items-center justify-between border-b border-white/10">
@@ -108,7 +108,9 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                   ? "Sistem Absensi Murid"
                   : activeRole === "TEACHER"
                   ? "Portal Presensi Guru"
-                  : "Portal Wali Kelas"}
+                  : activeRole === "HOMEROOM_TEACHER"
+                  ? "Portal Wali Kelas"
+                  : "AbsenKu"}
               </p>
             </div>
           </div>
@@ -136,12 +138,12 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                 .split(" ")
                 .map((n) => n[0])
                 .slice(0, 2)
-                .join("")}
+                .join("") || "?"}
             </div>
           )}
           <div className="overflow-hidden min-w-0">
             <h4 className="text-xs font-bold text-white truncate">
-              {currentUser.name}
+              {currentUser.name || "Pengguna"}
             </h4>
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {activeRole === "SUPER_ADMIN" && (

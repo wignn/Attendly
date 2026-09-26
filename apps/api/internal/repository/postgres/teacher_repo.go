@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"strings"
 
@@ -106,7 +108,13 @@ func (r *TeacherRepo) Create(ctx context.Context, input domain.TeacherCreateInpu
 	defer tx.Rollback(ctx)
 
 	pwd := strings.TrimSpace(input.Password)
-	if len(pwd) < 12 {
+	if pwd == "" {
+		secret := make([]byte, 32)
+		if _, err := rand.Read(secret); err != nil {
+			return nil, err
+		}
+		pwd = base64.RawURLEncoding.EncodeToString(secret)
+	} else if len(pwd) < 12 {
 		return nil, domain.ErrValidation
 	}
 	hashed, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)

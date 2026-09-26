@@ -17,7 +17,8 @@ import (
 )
 
 type mockTeacherRepoForHandler struct {
-	item *domain.TeacherRecord
+	item        *domain.TeacherRecord
+	createInput domain.TeacherCreateInput
 }
 
 func (m *mockTeacherRepoForHandler) List(_ context.Context, _ domain.TeacherFilter) ([]domain.TeacherRecord, int64, error) {
@@ -35,6 +36,7 @@ func (m *mockTeacherRepoForHandler) GetByID(_ context.Context, id uuid.UUID) (*d
 }
 
 func (m *mockTeacherRepoForHandler) Create(_ context.Context, in domain.TeacherCreateInput, _ uuid.UUID) (*domain.TeacherRecord, error) {
+	m.createInput = in
 	id := uuid.New()
 	rec := &domain.TeacherRecord{
 		ID:        id,

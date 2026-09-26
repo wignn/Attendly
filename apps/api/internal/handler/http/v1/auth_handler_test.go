@@ -16,6 +16,7 @@ import (
 	"github.com/wignn/komas-api/internal/domain"
 	"github.com/wignn/komas-api/internal/service"
 	"github.com/wignn/komas-api/pkg/token"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type mockUserRepo struct {
@@ -61,55 +62,17 @@ func TestAuthTokenResponseReturnsAllRolesAndUnionPermissions(t *testing.T) {
 	}
 }
 
-func TestRegisterRejectsCallerSelectedRole(t *testing.T) {
-	repo := &mockUserRepo{users: make(map[string]*domain.User)}
-	cfg := &config.Config{
-		JWTSecret:     "secret-32-character-key-for-test-12345",
-		JWTAccessTTL:  15 * time.Minute,
-		JWTRefreshTTL: 7 * 24 * time.Hour,
-	}
-	handler := NewAuthHandler(service.NewAuthService(repo, token.NewMaker(cfg.JWTSecret), cfg))
-
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"name":"Alice Test","email":"alice@enterprise.com","password":"strongpassword123","role":"SUPER_ADMIN"}`))
-	rec := httptest.NewRecorder()
-	handler.Register(rec, req)
-
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected register status 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var response struct {
-		Data struct {
-			TokenType string `json:"token_type"`
-			User      struct {
-				Roles       []domain.Role `json:"roles"`
-				Permissions []string      `json:"permissions"`
-				Role        string        `json:"role"`
-				Password    string        `json:"password"`
-			} `json:"user"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+func TestLogoutHandlerReturnsNoContentAndRevokesToken(t *testing.T) {
+	password, err := bcrypt.GenerateFromPassword([]byte("strongpassword123"), bcrypt.MinCost)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if response.Data.TokenType != "Bearer" {
-		t.Fatalf("expected token_type Bearer, got %q", response.Data.TokenType)
-	}
-	if len(response.Data.User.Roles) != 1 || response.Data.User.Roles[0] != domain.RoleTeacher {
-		t.Fatalf("expected sanitized user roles to contain TEACHER, got %#v", response.Data.User.Roles)
-	}
-	if response.Data.User.Role != "" || response.Data.User.Password != "" {
-		t.Fatal("auth response must not expose the raw user role or password")
-	}
-	if len(response.Data.User.Permissions) == 0 {
-		t.Fatal("expected current user permissions in auth response")
-	}
-	if got := repo.users["alice@enterprise.com"].Role; got != domain.RoleTeacher {
-		t.Fatalf("expected role %s, got %s", domain.RoleTeacher, got)
-	}
-}
-
-func TestLogoutHandlerReturnsNoContentAndRevokesToken(t *testing.T) {
-	repo := &mockUserRepo{users: make(map[string]*domain.User)}
+	repo := &mockUserRepo{users: map[string]*domain.User{
+		"alice@enterprise.com": {
+			ID: uuid.New(), Email: "alice@enterprise.com", Name: "Alice",
+			Password: string(password), Role: domain.RoleTeacher, IsActive: true,
+		},
+	}}
 	cfg := &config.Config{
 		JWTSecret:     "secret-32-character-key-for-test-12345",
 		JWTAccessTTL:  time.Minute,
@@ -117,18 +80,18 @@ func TestLogoutHandlerReturnsNoContentAndRevokesToken(t *testing.T) {
 	}
 	sessions := &handlerSessionMemory{active: make(map[string]domain.RefreshSession)}
 	handler := NewAuthHandler(service.NewAuthService(repo, token.NewMaker(cfg.JWTSecret), cfg, sessions))
-	registerReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"name":"Alice Test","email":"alice@enterprise.com","password":"strongpassword123"}`))
-	registerRec := httptest.NewRecorder()
-	handler.Register(registerRec, registerReq)
-	if registerRec.Code != http.StatusCreated {
-		t.Fatalf("expected registration 201, got %d: %s", registerRec.Code, registerRec.Body.String())
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{"email":"alice@enterprise.com","password":"strongpassword123"}`))
+	loginRec := httptest.NewRecorder()
+	handler.Login(loginRec, loginReq)
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d: %s", loginRec.Code, loginRec.Body.String())
 	}
 	var authResponse struct {
 		Data struct {
 			RefreshToken string `json:"refresh_token"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(registerRec.Body.Bytes(), &authResponse); err != nil {
+	if err := json.Unmarshal(loginRec.Body.Bytes(), &authResponse); err != nil {
 		t.Fatal(err)
 	}
 	body, err := json.Marshal(RefreshTokenRequest{RefreshToken: authResponse.Data.RefreshToken})
@@ -248,8 +211,17 @@ func TestGetMeReturnsCurrentUserContract(t *testing.T) {
 	}
 }
 
-func TestRegisterAndLoginHandler(t *testing.T) {
-	repo := &mockUserRepo{users: make(map[string]*domain.User)}
+func TestLoginHandlerForProvisionedUser(t *testing.T) {
+	password, err := bcrypt.GenerateFromPassword([]byte("strongpassword123"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := &mockUserRepo{users: map[string]*domain.User{
+		"alice@enterprise.com": {
+			ID: uuid.New(), Email: "alice@enterprise.com", Name: "Alice",
+			Password: string(password), Role: domain.RoleTeacher, IsActive: true,
+		},
+	}}
 	cfg := &config.Config{
 		JWTSecret:     "secret-32-character-key-for-test-12345",
 		JWTAccessTTL:  15 * time.Minute,
@@ -259,33 +231,14 @@ func TestRegisterAndLoginHandler(t *testing.T) {
 	authSvc := service.NewAuthService(repo, maker, cfg)
 	handler := NewAuthHandler(authSvc)
 
-	// 1. Test Register
-	regPayload := map[string]string{
-		"name":     "Alice Test",
-		"email":    "alice@enterprise.com",
-		"password": "strongpassword123",
-		"role":     "SUPER_ADMIN",
-	}
-	body, _ := json.Marshal(regPayload)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBuffer(body))
-	rec := httptest.NewRecorder()
-
-	handler.Register(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected register status 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if got := repo.users[regPayload["email"]].Role; got != domain.RoleTeacher {
-		t.Fatalf("expected public registration to assign TEACHER, got %s", got)
-	}
-
-	// 2. Test Login
 	loginPayload := LoginRequest{
 		Email:    "alice@enterprise.com",
 		Password: "strongpassword123",
 	}
-	body, _ = json.Marshal(loginPayload)
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBuffer(body))
-	rec = httptest.NewRecorder()
+	body, _ := json.Marshal(loginPayload)
+	// Test password login for an account provisioned by an administrator.
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
 
 	handler.Login(rec, req)
 	if rec.Code != http.StatusOK {

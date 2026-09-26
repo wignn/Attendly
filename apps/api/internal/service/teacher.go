@@ -43,7 +43,8 @@ func (s *TeacherService) Create(ctx context.Context, user *domain.User, input do
 	nip := strings.TrimSpace(input.NIP)
 	name := strings.TrimSpace(input.FullName)
 	email := strings.TrimSpace(input.Email)
-	if nip == "" || name == "" || email == "" || len(strings.TrimSpace(input.Password)) < 12 {
+	pwd := strings.TrimSpace(input.Password)
+	if nip == "" || name == "" || email == "" || (pwd != "" && len(pwd) < 12) {
 		return nil, domain.ErrValidation
 	}
 	return s.repo.Create(ctx, input, user.ID)

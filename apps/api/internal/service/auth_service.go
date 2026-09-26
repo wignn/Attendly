@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-
 	"github.com/google/uuid"
 	"github.com/wignn/komas-api/internal/config"
 	"github.com/wignn/komas-api/internal/domain"
@@ -51,36 +50,6 @@ func NewAuthService(
 		googleKeys: make(map[string]*rsa.PublicKey),
 		httpClient: &http.Client{Timeout: 5 * time.Second},
 	}
-}
-
-func (s *AuthService) Register(ctx context.Context, name, email, password string, _ domain.Role) (*domain.AuthTokens, error) {
-	existing, _ := s.userRepo.GetByEmail(ctx, email)
-	if existing != nil {
-		return nil, domain.ErrConflict
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-	user := &domain.User{
-		ID:        uuid.New(),
-		Email:     email,
-		Password:  string(hashedPassword),
-		Name:      name,
-		IsActive:  true,
-		Role:      domain.RoleTeacher,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	if err := s.userRepo.Create(ctx, user); err != nil {
-		return nil, err
-	}
-
-	return s.issueTokens(ctx, user, uuid.New())
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (*domain.AuthTokens, error) {

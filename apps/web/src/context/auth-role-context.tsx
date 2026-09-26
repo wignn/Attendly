@@ -13,8 +13,9 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   roles: string[];
-  nip: string;
+  nip?: string;
   roleLabel: string;
+  permissions?: string[];
   subject?: string;
   homeroomClass?: string;
   avatar?: string;
@@ -49,10 +50,10 @@ function getRoleLabel(role: UserRole): string {
 
 interface AuthRoleContextType {
   currentUser: AuthUser;
-  activeRole: UserRole;
+  activeRole: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password?: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   loginWithGoogle: (idToken: string) => Promise<boolean>;
   logout: () => Promise<void>;
 }
@@ -62,7 +63,7 @@ const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(und
 export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = React.useState<AuthUser>(EMPTY_USER);
-  const [activeRole, setActiveRole] = React.useState<UserRole>("TEACHER");
+  const [activeRole, setActiveRole] = React.useState<UserRole | null>(null);
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -74,8 +75,8 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
       email: userData.email,
       role,
       roles: userData.roles ?? [],
-      nip: "",
       roleLabel: getRoleLabel(role),
+      permissions: userData.permissions,
     };
     setCurrentUser(user);
     setActiveRole(role);
@@ -90,6 +91,7 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
+    let cancelled = false;
     const token = localStorage.getItem("token");
     if (!token) {
       setIsLoading(false);
@@ -97,48 +99,71 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
     }
 
     fetchApi<AuthTokenResponseDto["user"]>("/api/v1/me")
-      .then((user) => acceptSession(user))
+      .then((user) => {
+        if (!cancelled) {
+          acceptSession(user);
+        }
+      })
       .catch(() => {
         localStorage.removeItem("token");
         localStorage.removeItem("refresh_token");
         localStorage.removeItem("attendly_user");
         localStorage.removeItem("attendly_active_role");
         localStorage.setItem("attendly_is_auth", "false");
-        setIsAuthenticated(false);
-        setCurrentUser(EMPTY_USER);
+        if (!cancelled) {
+          setIsAuthenticated(false);
+          setCurrentUser(EMPTY_USER);
+          setActiveRole(null);
+        }
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [acceptSession]);
 
-  const finishLogin = React.useCallback((user: AuthRoleContextType["currentUser"]) => {
-    if (user.role === "SUPER_ADMIN") router.push("/dashboard");
-    else router.push("/portal-guru");
-  }, [router]);
+  const finishLogin = React.useCallback(
+    (role: UserRole) => {
+      if (role === "SUPER_ADMIN") router.push("/dashboard");
+      else router.push("/portal-guru");
+    },
+    [router]
+  );
 
-  const login = React.useCallback(async (email: string, password?: string): Promise<boolean> => {
-    const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    localStorage.setItem("token", res.access_token);
-    if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
-    acceptSession(res.user);
-    finishLogin({ ...EMPTY_USER, ...res.user, role: determinePrimaryRole(res.user.roles), roles: res.user.roles ?? [], roleLabel: getRoleLabel(determinePrimaryRole(res.user.roles)) });
-    return true;
-  }, [acceptSession, finishLogin]);
+  const login = React.useCallback(
+    async (email: string, password: string): Promise<boolean> => {
+      const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      localStorage.setItem("token", res.access_token);
+      if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
+      acceptSession(res.user);
+      const role = determinePrimaryRole(res.user.roles);
+      finishLogin(role);
+      return true;
+    },
+    [acceptSession, finishLogin]
+  );
 
-  const loginWithGoogle = React.useCallback(async (idToken: string): Promise<boolean> => {
-    const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/google", {
-      method: "POST",
-      body: JSON.stringify({ id_token: idToken }),
-    });
-    localStorage.setItem("token", res.access_token);
-    if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
-    acceptSession(res.user);
-    const role = determinePrimaryRole(res.user.roles);
-    finishLogin({ ...EMPTY_USER, ...res.user, role, roles: res.user.roles ?? [], roleLabel: getRoleLabel(role) });
-    return true;
-  }, [acceptSession, finishLogin]);
+  const loginWithGoogle = React.useCallback(
+    async (idToken: string): Promise<boolean> => {
+      const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      localStorage.setItem("token", res.access_token);
+      if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
+      acceptSession(res.user);
+      const role = determinePrimaryRole(res.user.roles);
+      finishLogin(role);
+      return true;
+    },
+    [acceptSession, finishLogin]
+  );
 
   const logout = React.useCallback(async () => {
     const refreshToken = localStorage.getItem("refresh_token");
@@ -158,13 +183,23 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("attendly_active_role");
     localStorage.setItem("attendly_is_auth", "false");
     setCurrentUser(EMPTY_USER);
-    setActiveRole("TEACHER");
+    setActiveRole(null);
     setIsAuthenticated(false);
     router.push("/login");
   }, [router]);
 
   return (
-    <AuthRoleContext.Provider value={{ currentUser, activeRole, isAuthenticated, isLoading, login, loginWithGoogle, logout }}>
+    <AuthRoleContext.Provider
+      value={{
+        currentUser,
+        activeRole,
+        isAuthenticated,
+        isLoading,
+        login,
+        loginWithGoogle,
+        logout,
+      }}
+    >
       {children}
     </AuthRoleContext.Provider>
   );

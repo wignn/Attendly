@@ -31,7 +31,6 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 			if redisClient != nil {
 				r.Use(middleware.RateLimit(redisClient, 15, time.Minute))
 			}
-			r.Post("/register", h.Auth.Register)
 			r.Post("/login", h.Auth.Login)
 			r.Post("/google", h.Auth.LoginWithGoogle)
 			r.Post("/refresh", h.Auth.RefreshToken)

@@ -1,11 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api-client";
-import {
-  AuthTokenResponseDto,
-  LoginRequestDto,
-  RegisterRequestDto,
-  UserProfileDto,
-} from "@komas/shared-types";
+import { AuthTokenResponseDto, LoginRequestDto, UserProfileDto } from "@komas/shared-types";
 
 export function useAuth() {
   const queryClient = useQueryClient();
@@ -17,40 +12,33 @@ export function useAuth() {
     enabled: typeof window !== "undefined" && !!localStorage.getItem("token"),
   });
 
+  const persistSession = (data: AuthTokenResponseDto) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("token", data.access_token);
+      if (data.refresh_token) {
+        localStorage.setItem("refresh_token", data.refresh_token);
+      }
+      localStorage.setItem("attendly_is_auth", "true");
+    }
+    queryClient.setQueryData(["user", "me"], data.user);
+  };
+
   const loginMutation = useMutation({
     mutationFn: (payload: LoginRequestDto) =>
       fetchApi<AuthTokenResponseDto>("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify(payload),
       }),
-    onSuccess: (data) => {
-      if (typeof window !== "undefined") {
-        localStorage.setItem("token", data.access_token);
-        if (data.refresh_token) {
-          localStorage.setItem("refresh_token", data.refresh_token);
-        }
-        localStorage.setItem("attendly_is_auth", "true");
-      }
-      queryClient.setQueryData(["user", "me"], data.user);
-    },
+    onSuccess: persistSession,
   });
 
-  const registerMutation = useMutation({
-    mutationFn: (payload: RegisterRequestDto) =>
-      fetchApi<AuthTokenResponseDto>("/api/v1/auth/register", {
+  const googleLoginMutation = useMutation({
+    mutationFn: (idToken: string) =>
+      fetchApi<AuthTokenResponseDto>("/api/v1/auth/google", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ id_token: idToken }),
       }),
-    onSuccess: (data) => {
-      if (typeof window !== "undefined") {
-        localStorage.setItem("token", data.access_token);
-        if (data.refresh_token) {
-          localStorage.setItem("refresh_token", data.refresh_token);
-        }
-        localStorage.setItem("attendly_is_auth", "true");
-      }
-      queryClient.setQueryData(["user", "me"], data.user);
-    },
+    onSuccess: persistSession,
   });
 
   const logout = () => {
@@ -73,7 +61,7 @@ export function useAuth() {
     user: userQuery.data,
     isLoading: userQuery.isLoading,
     login: loginMutation.mutateAsync,
-    register: registerMutation.mutateAsync,
+    loginWithGoogle: googleLoginMutation.mutateAsync,
     logout,
   };
 }

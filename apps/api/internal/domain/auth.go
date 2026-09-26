@@ -35,7 +35,6 @@ type RefreshSessionRepository interface {
 }
 
 type AuthService interface {
-	Register(ctx context.Context, name, email, password string, role Role) (*AuthTokens, error)
 	Login(ctx context.Context, email, password string) (*AuthTokens, error)
 	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
 	Logout(ctx context.Context, refreshToken string) error
