@@ -16,9 +16,13 @@ var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrStudentNotFound    = errors.New("student not found")
 	ErrDuplicateNIS       = errors.New("student NIS already exists")
-	ErrDuplicateNISN      = errors.New("student NISN already exists")
-	ErrEnrollmentConflict = errors.New("student enrollment conflicts with existing history")
-	ErrInvalidEnrollment  = errors.New("invalid student enrollment")
+	ErrDuplicateNISN           = errors.New("student NISN already exists")
+	ErrEnrollmentConflict      = errors.New("student enrollment conflicts with existing history")
+	ErrInvalidEnrollment       = errors.New("invalid student enrollment")
+	ErrSessionLocked           = errors.New("attendance session is submitted and locked")
+	ErrSessionVersionMismatch  = errors.New("attendance session has been modified concurrently")
+	ErrInvalidSessionStatus    = errors.New("invalid attendance session status")
+	ErrReopenReasonRequired    = errors.New("reopen reason is required")
 )
 
 type FieldError struct {

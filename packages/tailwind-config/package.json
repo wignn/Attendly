@@ -2,6 +2,7 @@
   "name": "@komas/tailwind-config",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "main": "tailwind.config.ts",
   "files": ["tailwind.config.ts"],
   "dependencies": {
