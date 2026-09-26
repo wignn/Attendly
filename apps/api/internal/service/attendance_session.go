@@ -63,8 +63,16 @@ func (s *AttendanceSessionService) CreateOrGet(ctx context.Context, user *domain
 	}
 
 	if in.ClassID != nil && *in.ClassID != uuid.Nil && in.SubjectID != nil && *in.SubjectID != uuid.Nil {
-		teacherID := user.ID
-		return s.repo.CreateOrGetManual(ctx, *in.ClassID, *in.SubjectID, teacherID, sessionDate, user.ID)
+		if !attendanceAdmin(user) {
+			allowed, err := s.repo.CanTeachClassSubject(ctx, user.ID, *in.ClassID, *in.SubjectID)
+			if err != nil {
+				return nil, false, err
+			}
+			if !allowed {
+				return nil, false, domain.ErrForbidden
+			}
+		}
+		return s.repo.CreateOrGetManual(ctx, *in.ClassID, *in.SubjectID, user.ID, sessionDate, user.ID)
 	}
 
 	return nil, false, domain.ErrValidation
@@ -79,7 +87,6 @@ func (s *AttendanceSessionService) GetByID(ctx context.Context, user *domain.Use
 		return nil, err
 	}
 	if !attendanceAdmin(user) && sess.TeacherID != user.ID {
-		// Homeroom or assigned teachers check can be extended, default check teacherID
 		return nil, domain.ErrForbidden
 	}
 	return sess, nil

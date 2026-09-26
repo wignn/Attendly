@@ -1,8 +1,16 @@
 import { ApiResponse } from "@komas/shared-types";
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080")
-  .replace(/\/+$/, "")
-  .replace(/\/api\/v1$/, "");
+function getBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+  const trimmed = envUrl.replace(/\/+$/, "");
+  // If NEXT_PUBLIC_API_URL has /api/v1 suffix, strip it because endpoints supply /api/v1
+  if (trimmed.endsWith("/api/v1")) {
+    return trimmed.slice(0, -"/api/v1".length);
+  }
+  return trimmed;
+}
+
+const API_BASE_URL = getBaseUrl();
 
 export class ApiError extends Error {
   constructor(
@@ -22,22 +30,42 @@ export async function fetchApi<T>(
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
-  if (token) {
+  if (!headers.has("Content-Type") && options.body && typeof options.body === "string") {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-  const body: ApiResponse<T> = await res.json();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch (err: any) {
+    throw new ApiError(
+      "NETWORK_ERROR",
+      "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL
+    );
+  }
+
+  let body: ApiResponse<T>;
+  try {
+    body = await res.json();
+  } catch {
+    if (!res.ok) {
+      throw new ApiError(`HTTP_${res.status}`, `HTTP error ${res.status}: ${res.statusText}`);
+    }
+    return {} as T;
+  }
 
   if (!res.ok || !body.success) {
     throw new ApiError(
-      body.error?.code || "UNKNOWN_ERROR",
-      body.error?.message || body.message || "Something went wrong",
+      body.error?.code || `HTTP_${res.status}`,
+      body.error?.message || body.message || "Terjadi kesalahan saat memproses permintaan",
       body.error?.details
     );
   }

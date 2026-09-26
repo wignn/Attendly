@@ -17,7 +17,7 @@ func NewTeacherService(repo domain.TeacherRepository) *TeacherService {
 }
 
 func (s *TeacherService) List(ctx context.Context, user *domain.User, f domain.TeacherFilter) ([]domain.TeacherRecord, int64, error) {
-	if !teacherReader(user) {
+	if !teacherAdmin(user) {
 		return nil, 0, domain.ErrForbidden
 	}
 	if f.Page < 1 {
@@ -30,7 +30,7 @@ func (s *TeacherService) List(ctx context.Context, user *domain.User, f domain.T
 }
 
 func (s *TeacherService) GetByID(ctx context.Context, user *domain.User, id uuid.UUID) (*domain.TeacherRecord, error) {
-	if !teacherReader(user) {
+	if !teacherAdmin(user) {
 		return nil, domain.ErrForbidden
 	}
 	return s.repo.GetByID(ctx, id)
@@ -43,7 +43,8 @@ func (s *TeacherService) Create(ctx context.Context, user *domain.User, input do
 	nip := strings.TrimSpace(input.NIP)
 	name := strings.TrimSpace(input.FullName)
 	email := strings.TrimSpace(input.Email)
-	if nip == "" || name == "" || email == "" {
+	pwd := strings.TrimSpace(input.Password)
+	if nip == "" || name == "" || email == "" || (pwd != "" && len(pwd) < 12) {
 		return nil, domain.ErrValidation
 	}
 	return s.repo.Create(ctx, input, user.ID)
@@ -73,10 +74,6 @@ func (s *TeacherService) Delete(ctx context.Context, user *domain.User, id uuid.
 		return domain.ErrForbidden
 	}
 	return s.repo.Delete(ctx, id, user.ID)
-}
-
-func teacherReader(user *domain.User) bool {
-	return user != nil && user.IsActive && (user.HasRole(domain.RoleSuperAdmin) || user.HasRole(domain.RoleTeacher) || user.HasRole(domain.RoleHomeroomTeacher))
 }
 
 func teacherAdmin(user *domain.User) bool {

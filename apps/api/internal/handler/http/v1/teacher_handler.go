@@ -82,7 +82,6 @@ func (h *TeacherHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid request body", nil)
 		return
 	}
-	in.Password = ""
 
 	user := middleware.GetAuthenticatedUser(r.Context())
 	item, err := h.service.Create(r.Context(), user, in)

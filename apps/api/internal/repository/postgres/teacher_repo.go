@@ -107,13 +107,15 @@ func (r *TeacherRepo) Create(ctx context.Context, input domain.TeacherCreateInpu
 	}
 	defer tx.Rollback(ctx)
 
-	pwd := input.Password
-	if strings.TrimSpace(pwd) == "" {
+	pwd := strings.TrimSpace(input.Password)
+	if pwd == "" {
 		secret := make([]byte, 32)
 		if _, err := rand.Read(secret); err != nil {
 			return nil, err
 		}
 		pwd = base64.RawURLEncoding.EncodeToString(secret)
+	} else if len(pwd) < 12 {
+		return nil, domain.ErrValidation
 	}
 	hashed, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
 	if err != nil {
@@ -149,7 +151,9 @@ func (r *TeacherRepo) Create(ctx context.Context, input domain.TeacherCreateInpu
 		return nil, err
 	}
 
-	_, _ = tx.Exec(ctx, `INSERT INTO audit_events (actor_id, action, entity, entity_id) VALUES ($1, 'CREATE', 'TEACHER', $2)`, actorID, userID)
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_events (actor_id, action, entity, entity_id) VALUES ($1, 'CREATE', 'TEACHER', $2)`, actorID, userID); err != nil {
+		return nil, err
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err

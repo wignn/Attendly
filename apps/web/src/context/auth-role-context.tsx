@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { fetchApi } from "@/lib/api-client";
+import { AuthTokenResponseDto } from "@komas/shared-types";
 
 export type UserRole = "SUPER_ADMIN" | "TEACHER" | "HOMEROOM_TEACHER";
 
@@ -10,25 +11,41 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  roles: UserRole[];
-  permissions?: string[];
+  role: UserRole;
+  roles: string[];
   nip?: string;
-  roleLabel?: string;
+  roleLabel: string;
+  permissions?: string[];
   subject?: string;
   homeroomClass?: string;
   avatar?: string;
 }
 
-interface AuthTokenResponse {
-  access_token: string;
-  refresh_token: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    roles: UserRole[];
-    permissions?: string[];
-  };
+const EMPTY_USER: AuthUser = {
+  id: "",
+  name: "",
+  email: "",
+  role: "TEACHER",
+  roles: [],
+  nip: "",
+  roleLabel: "",
+};
+
+function determinePrimaryRole(roles?: string[]): UserRole {
+  if (roles?.includes("SUPER_ADMIN")) return "SUPER_ADMIN";
+  if (roles?.includes("HOMEROOM_TEACHER")) return "HOMEROOM_TEACHER";
+  return "TEACHER";
+}
+
+function getRoleLabel(role: UserRole): string {
+  switch (role) {
+    case "SUPER_ADMIN":
+      return "Super Admin";
+    case "HOMEROOM_TEACHER":
+      return "Guru & Wali Kelas";
+    default:
+      return "Guru Mata Pelajaran";
+  }
 }
 
 interface AuthRoleContextType {
@@ -38,32 +55,39 @@ interface AuthRoleContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   loginWithGoogle: (idToken: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
-const EMPTY_USER: AuthUser = {
-  id: "",
-  name: "",
-  email: "",
-  roles: [],
-};
-
-const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(
-  undefined
-);
+const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(undefined);
 
 export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = React.useState<AuthUser>(EMPTY_USER);
   const [activeRole, setActiveRole] = React.useState<UserRole | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
 
-  const applySession = React.useCallback((session: AuthTokenResponse) => {
-    localStorage.setItem("token", session.access_token);
-    localStorage.setItem("refresh_token", session.refresh_token);
-    const user = { ...session.user, roles: session.user.roles || [] };
+  const acceptSession = React.useCallback((userData: AuthTokenResponseDto["user"]) => {
+    const role = determinePrimaryRole(userData.roles);
+    const user: AuthUser = {
+      id: userData.id,
+      name: userData.name,
+      email: userData.email,
+      role,
+      roles: userData.roles ?? [],
+      roleLabel: getRoleLabel(role),
+      permissions: userData.permissions,
+    };
     setCurrentUser(user);
-    setActiveRole(user.roles.includes("SUPER_ADMIN") ? "SUPER_ADMIN" : user.roles[0] ?? null);
+    setActiveRole(role);
+    setIsAuthenticated(true);
+    try {
+      localStorage.setItem("attendly_active_role", role);
+      localStorage.setItem("attendly_is_auth", "true");
+      localStorage.setItem("attendly_user", JSON.stringify(user));
+    } catch {
+      // Session remains active in memory when browser storage is unavailable.
+    }
   }, []);
 
   React.useEffect(() => {
@@ -74,18 +98,20 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    fetchApi<AuthUser>("/api/v1/users/me")
+    fetchApi<AuthTokenResponseDto["user"]>("/api/v1/me")
       .then((user) => {
         if (!cancelled) {
-          const roles = user.roles || [];
-          setCurrentUser({ ...user, roles });
-          setActiveRole(roles.includes("SUPER_ADMIN") ? "SUPER_ADMIN" : roles[0] ?? null);
+          acceptSession(user);
         }
       })
       .catch(() => {
         localStorage.removeItem("token");
         localStorage.removeItem("refresh_token");
+        localStorage.removeItem("attendly_user");
+        localStorage.removeItem("attendly_active_role");
+        localStorage.setItem("attendly_is_auth", "false");
         if (!cancelled) {
+          setIsAuthenticated(false);
           setCurrentUser(EMPTY_USER);
           setActiveRole(null);
         }
@@ -97,38 +123,68 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [acceptSession]);
 
-  const authenticate = React.useCallback(
-    async (endpoint: string, payload: Record<string, string>) => {
-      const session = await fetchApi<AuthTokenResponse>(endpoint, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      applySession(session);
-      router.push("/dashboard");
-      return true;
+  const finishLogin = React.useCallback(
+    (role: UserRole) => {
+      if (role === "SUPER_ADMIN") router.push("/dashboard");
+      else router.push("/portal-guru");
     },
-    [applySession, router]
+    [router]
   );
 
   const login = React.useCallback(
-    (email: string, password: string) =>
-      authenticate("/api/v1/auth/login", { email, password }),
-    [authenticate]
+    async (email: string, password: string): Promise<boolean> => {
+      const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      localStorage.setItem("token", res.access_token);
+      if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
+      acceptSession(res.user);
+      const role = determinePrimaryRole(res.user.roles);
+      finishLogin(role);
+      return true;
+    },
+    [acceptSession, finishLogin]
   );
 
   const loginWithGoogle = React.useCallback(
-    (idToken: string) =>
-      authenticate("/api/v1/auth/google", { id_token: idToken }),
-    [authenticate]
+    async (idToken: string): Promise<boolean> => {
+      const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      localStorage.setItem("token", res.access_token);
+      if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
+      acceptSession(res.user);
+      const role = determinePrimaryRole(res.user.roles);
+      finishLogin(role);
+      return true;
+    },
+    [acceptSession, finishLogin]
   );
 
-  const logout = React.useCallback(() => {
+  const logout = React.useCallback(async () => {
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (refreshToken) {
+      try {
+        await fetchApi("/api/v1/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      } catch {
+        // Clear the local session even when the API is unreachable.
+      }
+    }
     localStorage.removeItem("token");
     localStorage.removeItem("refresh_token");
+    localStorage.removeItem("attendly_user");
+    localStorage.removeItem("attendly_active_role");
+    localStorage.setItem("attendly_is_auth", "false");
     setCurrentUser(EMPTY_USER);
     setActiveRole(null);
+    setIsAuthenticated(false);
     router.push("/login");
   }, [router]);
 
@@ -137,7 +193,7 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
       value={{
         currentUser,
         activeRole,
-        isAuthenticated: !!currentUser.id,
+        isAuthenticated,
         isLoading,
         login,
         loginWithGoogle,
@@ -151,8 +207,6 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuthRole() {
   const context = React.useContext(AuthRoleContext);
-  if (!context) {
-    throw new Error("useAuthRole must be used within an AuthRoleProvider");
-  }
+  if (!context) throw new Error("useAuthRole must be used within an AuthRoleProvider");
   return context;
 }

@@ -3,6 +3,7 @@ package v1
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -124,15 +125,17 @@ func TestTeacherHandlerHTTP(t *testing.T) {
 	}
 
 	// 3. Create
-	createBody := []byte(`{"nip":"199002022015012002","full_name":"Ahmad Fauzi","email":"ahmad@school.id","password":"attacker-controlled-password"}`)
+	createBody, _ := json.Marshal(domain.TeacherCreateInput{
+		NIP:      "199002022015012002",
+		FullName: "Ahmad Fauzi",
+		Email:    "ahmad@school.id",
+		Password: "ValidTeacherPass123!",
+	})
 	req = httptest.NewRequest(http.MethodPost, "/teachers", bytes.NewReader(createBody))
 	rec = httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", rec.Code)
-	}
-	if repo.createInput.Password != "" {
-		t.Fatal("teacher creation must not accept a caller-provided password")
 	}
 
 	// 4. Update

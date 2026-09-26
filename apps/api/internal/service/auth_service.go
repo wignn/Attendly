@@ -120,6 +120,10 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, idToken string) (*dom
 	if err != nil || !user.IsActive {
 		return nil, domain.ErrInvalidCredentials
 	}
+
+	// The configured bootstrap email is not an allowlist: registration or Google
+	// login alone must never grant a privileged role. Bootstrap is a separate,
+	// persisted, operator-controlled transition.
 	return s.issueTokens(ctx, user, uuid.New())
 }
 
