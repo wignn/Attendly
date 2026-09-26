@@ -18,6 +18,8 @@ type Handlers struct {
 	Schedules         *ScheduleHandler
 	Student           *StudentHandler
 	AttendanceSession *AttendanceSessionHandler
+	Subject           *SubjectHandler
+	AcademicYear      *AcademicYearHandler
 }
 
 func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client, userRepository domain.UserRepository) {
@@ -62,6 +64,21 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/students/{student_id}", h.Student.Delete)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students/{student_id}/enrollments", h.Student.Enrollments)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/students/{student_id}/enrollments", h.Student.Transfer)
+			}
+			if h.Subject != nil {
+				r.Get("/subjects", h.Subject.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/subjects", h.Subject.Create)
+				r.Get("/subjects/{id}", h.Subject.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/subjects/{id}", h.Subject.Update)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/subjects/{id}", h.Subject.Delete)
+			}
+			if h.AcademicYear != nil {
+				r.Get("/academic-years", h.AcademicYear.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/academic-years", h.AcademicYear.Create)
+				r.Get("/academic-years/{id}", h.AcademicYear.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/academic-years/{id}", h.AcademicYear.Update)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/academic-years/{id}", h.AcademicYear.Delete)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/academic-years/{id}/activate", h.AcademicYear.Activate)
 			}
 			if h.AttendanceSession != nil {
 				r.Get("/attendance-sessions", h.AttendanceSession.List)
