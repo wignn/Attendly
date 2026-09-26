@@ -32,7 +32,6 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const { currentUser, activeRole, logout } = useAuthRole();
 
-  // Build navigation from all server-assigned roles; the client cannot grant roles.
   const navSections = React.useMemo(() => {
     if (currentUser.roles.includes("SUPER_ADMIN")) {
       return [
@@ -52,7 +51,6 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
           ],
         },
       ];
-    }
 
     const sections = [];
     if (currentUser.roles.includes("TEACHER")) {

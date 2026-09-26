@@ -6,6 +6,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { AttendanceDateProvider } from "@/context/attendance-date-context";
 import { useAuthRole } from "@/context/auth-role-context";
 import { usePathname, useRouter } from "next/navigation";
+mport { TeachingSessionsProvider } from "@/context/teaching-sessions-context";
 
 export default function DashboardLayout({
   children,
@@ -37,7 +38,8 @@ export default function DashboardLayout({
 
   return (
     <AttendanceDateProvider>
-      <div className="min-h-screen flex flex-col md:flex-row bg-[#fbf5e6] text-slate-800 antialiased overflow-x-hidden">
+      <TeachingSessionsProvider>
+        <div className="min-h-screen flex flex-col md:flex-row bg-[#fbf5e6] text-slate-800 antialiased overflow-x-hidden">
         {/* Sidebar Navigasi Kiri */}
         <Sidebar
           mobileOpen={mobileSidebarOpen}
@@ -52,6 +54,7 @@ export default function DashboardLayout({
           </main>
         </div>
       </div>
+      </TeachingSessionsProvider>
     </AttendanceDateProvider>
   );
 }
