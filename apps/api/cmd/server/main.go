@@ -66,6 +66,7 @@ func main() {
 	subjectService := service.NewSubjectService(postgres.NewSubjectRepo(dbPool))
 	academicYearService := service.NewAcademicYearService(postgres.NewAcademicYearRepo(dbPool))
 	teacherService := service.NewTeacherService(postgres.NewTeacherRepo(dbPool))
+	classService := service.NewClassService(postgres.NewClassRepo(dbPool))
 
 	handlers := v1.Handlers{
 		Auth:              v1.NewAuthHandler(authService),
@@ -78,6 +79,7 @@ func main() {
 		Subject:           v1.NewSubjectHandler(subjectService),
 		AcademicYear:      v1.NewAcademicYearHandler(academicYearService),
 		Teacher:           v1.NewTeacherHandler(teacherService),
+		Class:             v1.NewClassHandler(classService),
 	}
 	healthHandler := v1.NewHealthHandler()
 

@@ -509,16 +509,196 @@ paths:
       tags: [Classes]
       summary: Daftar kelas
       operationId: listClasses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: academic_year_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: homeroom_teacher_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
       responses:
         '200':
           description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClasses'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Classes]
-      summary: Tambah kelas
+      summary: Tambah kelas (Super Admin)
       operationId: createClass
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassCreateRequest'
       responses:
         '201':
           description: Berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassDetailResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /classes/{class_id}:
+    get:
+      tags: [Classes]
+      summary: Detail kelas
+      operationId: getClass
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: class_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassDetailResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Classes]
+      summary: Update kelas (Super Admin)
+      operationId: updateClass
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: class_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassUpdateRequest'
+      responses:
+        '200':
+          description: Berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassDetailResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Classes]
+      summary: Hapus kelas (Super Admin)
+      operationId: deleteClass
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: class_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Berhasil dihapus }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /classes/{class_id}/students:
+    get:
+      tags: [Classes]
+      summary: Daftar siswa dalam kelas
+      operationId: listClassStudents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: class_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClassStudents'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Classes]
+      summary: Tambahkan siswa ke kelas (Super Admin)
+      operationId: addStudentToClass
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: class_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [student_id]
+              properties:
+                student_id: { type: string, format: uuid }
+                effective_date: { type: string, format: date }
+      responses:
+        '200': { description: Siswa berhasil ditambahkan }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /classes/{class_id}/students/{student_id}:
+    delete:
+      tags: [Classes]
+      summary: Keluarkan siswa dari kelas (Super Admin)
+      operationId: removeStudentFromClass
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: class_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: student_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: effective_date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '204': { description: Siswa berhasil dikeluarkan }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /subjects:
     get:
       tags: [Subjects]
@@ -2391,4 +2571,118 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/AcademicYearDetail'
+    ClassCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        grade:
+          type: string
+        section:
+          type: string
+        academic_year_id:
+          type: string
+          format: uuid
+        homeroom_teacher_id:
+          type: string
+          format: uuid
+    ClassUpdateRequest:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        grade:
+          type: string
+        section:
+          type: string
+        academic_year_id:
+          type: string
+          format: uuid
+        homeroom_teacher_id:
+          type: string
+          format: uuid
+        clear_homeroom_teacher:
+          type: boolean
+    ClassDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        grade:
+          type: string
+        section:
+          type: string
+        academic_year_id:
+          type: string
+          format: uuid
+        academic_year_name:
+          type: string
+        homeroom_teacher_id:
+          type: string
+          format: uuid
+        homeroom_teacher_name:
+          type: string
+        total_students:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ClassDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ClassDetail'
+    PaginatedClasses:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClassDetail'
+    ClassStudentItem:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        nis:
+          type: string
+        nisn:
+          type: string
+        full_name:
+          type: string
+        active:
+          type: boolean
+        valid_from:
+          type: string
+          format: date
+        enrolled_at:
+          type: string
+          format: date-time
+    PaginatedClassStudents:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClassStudentItem'
 
