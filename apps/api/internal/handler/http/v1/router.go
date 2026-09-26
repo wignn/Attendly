@@ -36,19 +36,13 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 			r.Get("/users/me", h.User.GetMe)
 			r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/users", h.User.ListUsers)
 			if h.Student != nil {
-				r.Route("/students", func(r chi.Router) {
-					r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/", h.Student.List)
-					r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/", h.Student.Create)
-					r.Route("/{student_id}", func(r chi.Router) {
-						r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/", h.Student.Get)
-						r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/", h.Student.Update)
-						r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/", h.Student.Delete)
-						r.Route("/enrollments", func(r chi.Router) {
-							r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/", h.Student.Enrollments)
-							r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/", h.Student.Transfer)
-						})
-					})
-				})
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students", h.Student.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/students", h.Student.Create)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students/{student_id}", h.Student.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/students/{student_id}", h.Student.Update)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/students/{student_id}", h.Student.Delete)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students/{student_id}/enrollments", h.Student.Enrollments)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/students/{student_id}/enrollments", h.Student.Transfer)
 			}
 			if h.Attendance != nil {
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/dashboard", h.Attendance.AdminDashboard)

@@ -23,3 +23,13 @@ Run from `apps/api`:
 ## Scope notes
 
 The handler uses the current service API and existing response envelope. Collection requests default to page 1, 20 per page, `created_at` ascending; `per_page` is constrained to 1–100. Effective dates accept ISO `YYYY-MM-DD`; omitted dates remain nil for the service's Asia/Jakarta default.
+
+## Route review follow-up
+
+The route review found that nested slash patterns could require a trailing slash. Replaced them with explicit canonical registrations for `/api/v1/students`, `/api/v1/students/{student_id}`, and `/api/v1/students/{student_id}/enrollments`. Added an end-to-end `RegisterRoutes` test that invokes all seven canonical method/path combinations with authenticated Super Admin credentials. Added a test rejecting a second JSON value after a valid body.
+
+Follow-up verification from `apps/api`:
+
+- `go test ./internal/handler/http/v1 -run 'TestStudent|TestRegisterRoutes' -count=1` — PASS.
+- `go test ./internal/handler/http/v1 -count=1` — PASS.
+- `git diff --check` — PASS (line-ending conversion notices only).

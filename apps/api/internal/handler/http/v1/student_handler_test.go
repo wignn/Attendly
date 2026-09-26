@@ -236,3 +236,79 @@ func TestStudentRoutesRequireSuperAdmin(t *testing.T) {
 		t.Fatalf("non-admin status=%d, want 403", rec.Code)
 	}
 }
+
+func TestRegisterRoutesUsesCanonicalStudentPaths(t *testing.T) {
+	userID := uuid.New()
+	users := &mockUserRepo{users: map[string]*domain.User{
+		"admin@example.com": {ID: userID, Email: "admin@example.com", IsActive: true, Role: domain.RoleSuperAdmin},
+	}}
+	maker := token.NewMaker("secret-32-character-key-for-test-12345")
+	access, err := maker.GenerateToken(userID, "admin@example.com", domain.RoleSuperAdmin, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	student := studentRecord()
+	serviceStub := studentServiceStub{
+		list: func(context.Context, *domain.User, domain.StudentListFilter) ([]domain.StudentRecord, int64, error) {
+			return []domain.StudentRecord{student}, 1, nil
+		},
+		get: func(context.Context, *domain.User, uuid.UUID) (domain.StudentRecord, error) { return student, nil },
+		create: func(context.Context, *domain.User, service.StudentCreateInput) (domain.StudentRecord, error) {
+			return student, nil
+		},
+		update: func(context.Context, *domain.User, uuid.UUID, service.StudentUpdateInput) (domain.StudentRecord, error) {
+			return student, nil
+		},
+		delete: func(context.Context, *domain.User, uuid.UUID) error { return nil },
+		enrollments: func(context.Context, *domain.User, uuid.UUID) ([]domain.StudentEnrollment, error) {
+			return []domain.StudentEnrollment{}, nil
+		},
+		transfer: func(context.Context, *domain.User, uuid.UUID, service.StudentTransferInput) (domain.StudentRecord, error) {
+			return student, nil
+		},
+	}
+	handlers := Handlers{
+		Auth:    NewAuthHandler(nil),
+		User:    NewUserHandler(service.NewUserService(users)),
+		Student: NewStudentHandler(serviceStub),
+	}
+	router := chi.NewRouter()
+	RegisterRoutes(router, handlers, maker, nil, users)
+
+	tests := []struct {
+		name, method, path, body string
+		want                     int
+	}{
+		{"list", http.MethodGet, "/api/v1/students", "", http.StatusOK},
+		{"create", http.MethodPost, "/api/v1/students", `{"nis":"N1","full_name":"Student","class_id":"f0fd2655-74e3-4b47-9c89-2ff2f21d9c8f"}`, http.StatusCreated},
+		{"detail", http.MethodGet, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", "", http.StatusOK},
+		{"update", http.MethodPatch, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", `{"active":false}`, http.StatusOK},
+		{"delete", http.MethodDelete, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", "", http.StatusOK},
+		{"enrollment history", http.MethodGet, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426/enrollments", "", http.StatusOK},
+		{"enrollment transfer", http.MethodPost, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426/enrollments", `{"class_id":"f0fd2655-74e3-4b47-9c89-2ff2f21d9c8f"}`, http.StatusCreated},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			req.Header.Set("Authorization", "Bearer "+access)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != tt.want {
+				t.Fatalf("%s %s returned %d, want %d: %s", tt.method, tt.path, rec.Code, tt.want, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestStudentHandlerRejectsSecondJSONValue(t *testing.T) {
+	h := NewStudentHandler(studentServiceStub{
+		create: func(context.Context, *domain.User, service.StudentCreateInput) (domain.StudentRecord, error) {
+			t.Fatal("service called for trailing JSON value")
+			return domain.StudentRecord{}, nil
+		},
+	})
+	rec := assertStudentStatus(t, h.Create, http.MethodPost, "/students", `{"nis":"N1","full_name":"Student","class_id":"f0fd2655-74e3-4b47-9c89-2ff2f21d9c8f"} {}`, http.StatusBadRequest)
+	if !strings.Contains(rec.Body.String(), `"code":"INVALID_PAYLOAD"`) {
+		t.Fatalf("expected malformed payload envelope, got %s", rec.Body.String())
+	}
+}
