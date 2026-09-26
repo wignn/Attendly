@@ -14,6 +14,11 @@ var (
 	ErrInvalidRole        = errors.New("invalid role")
 	ErrInternal           = errors.New("internal server error")
 	ErrInvalidCredentials = errors.New("invalid email or password")
+	ErrStudentNotFound    = errors.New("student not found")
+	ErrDuplicateNIS       = errors.New("student NIS already exists")
+	ErrDuplicateNISN      = errors.New("student NISN already exists")
+	ErrEnrollmentConflict = errors.New("student enrollment conflicts with existing history")
+	ErrInvalidEnrollment  = errors.New("invalid student enrollment")
 )
 
 type FieldError struct {
