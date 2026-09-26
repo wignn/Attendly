@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -18,14 +19,17 @@ type reportRepoStub struct {
 	studentAccess  bool
 	subjectAccess  bool
 	homeroomAccess bool
+	activities     []domain.Activity
 	err            error
+	auditErr       error
+	onAudit        func(domain.Activity)
 }
 
 func (r reportRepoStub) AdminDashboard(context.Context) (domain.AdminDashboard, error) {
 	return domain.AdminDashboard{Attendance: r.counts}, r.err
 }
 func (r reportRepoStub) TeacherDashboard(context.Context, uuid.UUID) (domain.TeacherDashboard, error) {
-	return domain.TeacherDashboard{Attendance: r.counts}, r.err
+	return domain.TeacherDashboard{Attendance: r.counts, Classes: r.classes}, r.err
 }
 func (r reportRepoStub) HomeroomDashboard(context.Context, uuid.UUID) (domain.TeacherDashboard, error) {
 	return domain.TeacherDashboard{Attendance: r.counts}, r.err
@@ -43,7 +47,13 @@ func (r reportRepoStub) HomeroomReport(context.Context, uuid.UUID, uuid.UUID, in
 	return r.class, 1, r.err
 }
 func (r reportRepoStub) Activities(context.Context, int32, int32) ([]domain.Activity, int64, error) {
-	return nil, 0, r.err
+	return r.activities, int64(len(r.activities)), r.err
+}
+func (r reportRepoStub) RecordActivity(_ context.Context, actorID uuid.UUID, action, entity string, entityID uuid.UUID) error {
+	if r.onAudit != nil {
+		r.onAudit(domain.Activity{ActorID: actorID, Action: action, Entity: entity, EntityID: entityID})
+	}
+	return r.auditErr
 }
 func (r reportRepoStub) CanAccessSubject(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
 	return r.subjectAccess, r.err
@@ -72,6 +82,28 @@ func TestAdminDashboardRejectsNonAdmin(t *testing.T) {
 	_, err := NewAttendanceReportService(reportRepoStub{}).AdminDashboard(context.Background(), user)
 	if err != domain.ErrForbidden {
 		t.Fatalf("expected non-admin dashboard access to be forbidden, got %v", err)
+	}
+}
+
+func TestTeacherDashboardRecordsAuditActivity(t *testing.T) {
+	user := &domain.User{ID: uuid.New(), IsActive: true, Roles: []domain.Role{domain.RoleTeacher}}
+	var recorded domain.Activity
+	repo := reportRepoStub{onAudit: func(activity domain.Activity) { recorded = activity }}
+	_, err := NewAttendanceReportService(repo).TeacherDashboard(context.Background(), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recorded.ActorID != user.ID || recorded.Action != "VIEW" || recorded.Entity != "TEACHER_DASHBOARD" || recorded.EntityID != user.ID {
+		t.Fatalf("expected teacher dashboard view audit event, got %+v", recorded)
+	}
+}
+
+func TestTeacherDashboardReturnsAuditFailure(t *testing.T) {
+	user := &domain.User{ID: uuid.New(), IsActive: true, Roles: []domain.Role{domain.RoleTeacher}}
+	auditErr := errors.New("audit storage unavailable")
+	_, err := NewAttendanceReportService(reportRepoStub{auditErr: auditErr}).TeacherDashboard(context.Background(), user)
+	if !errors.Is(err, auditErr) {
+		t.Fatalf("expected audit write error, got %v", err)
 	}
 }
 

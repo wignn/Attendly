@@ -92,9 +92,10 @@ type StudentAttendanceSummary struct {
 }
 
 type SubjectClassReport struct {
-	Class  SchoolClass      `json:"class"`
-	Counts AttendanceCounts `json:"counts"`
-	Rate   float64          `json:"attendance_rate"`
+	Class   SchoolClass      `json:"class"`
+	Subject Subject          `json:"subject"`
+	Counts  AttendanceCounts `json:"counts"`
+	Rate    float64          `json:"attendance_rate"`
 }
 
 type ClassAttendanceReport struct {
@@ -137,6 +138,7 @@ type AttendanceReportRepository interface {
 	ClassAttendance(context.Context, uuid.UUID, uuid.UUID, int32, int32) (ClassAttendanceReport, int64, error)
 	HomeroomReport(context.Context, uuid.UUID, uuid.UUID, int32, int32) (ClassAttendanceReport, int64, error)
 	Activities(context.Context, int32, int32) ([]Activity, int64, error)
+	RecordActivity(context.Context, uuid.UUID, string, string, uuid.UUID) error
 	CanAccessSubject(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 	IsAssignedToClassSubject(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (bool, error)
 	IsHomeroomOfStudent(context.Context, uuid.UUID, uuid.UUID) (bool, error)

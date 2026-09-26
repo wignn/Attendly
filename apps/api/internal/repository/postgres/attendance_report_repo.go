@@ -33,7 +33,7 @@ func (r *AttendanceReportRepo) AdminDashboard(ctx context.Context) (domain.Admin
 	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM students WHERE active`).Scan(&result.TotalStudents); err != nil {
 		return result, err
 	}
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(DISTINCT id) FROM users`).Scan(&result.TotalTeachers); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(DISTINCT ur.user_id) FROM user_roles ur JOIN roles ro ON ro.role_id=ur.role_id WHERE ro.name IN ('TEACHER','HOMEROOM_TEACHER')`).Scan(&result.TotalTeachers); err != nil {
 		return result, err
 	}
 	query := `SELECT ` + attendanceCountsExpr + ` FROM attendance_records ar JOIN attendance_sessions s ON s.id = ar.session_id WHERE s.held_at::date = CURRENT_DATE`
@@ -44,15 +44,52 @@ func (r *AttendanceReportRepo) AdminDashboard(ctx context.Context) (domain.Admin
 
 func (r *AttendanceReportRepo) TeacherDashboard(ctx context.Context, teacherID uuid.UUID) (domain.TeacherDashboard, error) {
 	counts, _, err := r.teacherCounts(ctx, teacherID)
-	result := domain.TeacherDashboard{Attendance: counts, Rate: counts.AttendanceRate()}
-	return result, err
+	if err != nil {
+		return domain.TeacherDashboard{}, err
+	}
+	classes, _, err := r.SubjectClasses(ctx, uuid.Nil, teacherID, 1, 10)
+	return domain.TeacherDashboard{Attendance: counts, Rate: counts.AttendanceRate(), Classes: classes}, err
+}
+
+func (r *AttendanceReportRepo) homeroomClasses(ctx context.Context, teacherID uuid.UUID, limit int32) ([]domain.SubjectClassReport, int64, error) {
+	query := `SELECT c.id,c.name,c.homeroom_teacher_id,sub.id,sub.name,` + attendanceCountsExpr + `
+		FROM classes c JOIN (SELECT DISTINCT class_id,subject_id FROM teaching_assignments) ta ON ta.class_id=c.id JOIN subjects sub ON sub.id=ta.subject_id LEFT JOIN attendance_sessions s ON s.class_id=c.id AND s.subject_id=sub.id LEFT JOIN attendance_records ar ON ar.session_id=s.id
+		WHERE c.homeroom_teacher_id=$1 GROUP BY c.id,sub.id,sub.name ORDER BY c.name,sub.name LIMIT $2`
+	rows, err := r.pool.Query(ctx, query, teacherID, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	classes := make([]domain.SubjectClassReport, 0)
+	for rows.Next() {
+		var report domain.SubjectClassReport
+		var subjectID uuid.UUID
+		var subjectName string
+		if err := rows.Scan(&report.Class.ID, &report.Class.Name, &report.Class.HomeroomTeacherID, &subjectID, &subjectName, &report.Counts.Present, &report.Counts.Excused, &report.Counts.Sick, &report.Counts.UnexcusedAbsent, &report.Counts.Total); err != nil {
+			return nil, 0, err
+		}
+		report.Subject = domain.Subject{ID: subjectID, Name: subjectName}
+		report.Rate = report.Counts.AttendanceRate()
+		classes = append(classes, report)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	var total int64
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM (SELECT DISTINCT c.id,sub.id FROM classes c JOIN teaching_assignments ta ON ta.class_id=c.id JOIN subjects sub ON sub.id=ta.subject_id WHERE c.homeroom_teacher_id=$1) pairs`, teacherID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	return classes, total, nil
 }
 
 func (r *AttendanceReportRepo) HomeroomDashboard(ctx context.Context, teacherID uuid.UUID) (domain.TeacherDashboard, error) {
 	query := `SELECT ` + attendanceCountsExpr + ` FROM attendance_records ar JOIN attendance_sessions s ON s.id = ar.session_id JOIN classes c ON c.id = s.class_id WHERE c.homeroom_teacher_id = $1 AND s.held_at::date = CURRENT_DATE`
 	var counts domain.AttendanceCounts
-	err := scanCounts(r.pool.QueryRow(ctx, query, teacherID), &counts)
-	return domain.TeacherDashboard{Attendance: counts, Rate: counts.AttendanceRate()}, err
+	if err := scanCounts(r.pool.QueryRow(ctx, query, teacherID), &counts); err != nil {
+		return domain.TeacherDashboard{}, err
+	}
+	classes, _, err := r.homeroomClasses(ctx, teacherID, 10)
+	return domain.TeacherDashboard{Attendance: counts, Rate: counts.AttendanceRate(), Classes: classes}, err
 }
 
 func (r *AttendanceReportRepo) teacherCounts(ctx context.Context, teacherID uuid.UUID) (domain.AttendanceCounts, int64, error) {
@@ -78,13 +115,13 @@ func (r *AttendanceReportRepo) StudentSummary(ctx context.Context, studentID uui
 }
 
 func (r *AttendanceReportRepo) SubjectClasses(ctx context.Context, subjectID, teacherID uuid.UUID, page, perPage int32) ([]domain.SubjectClassReport, int64, error) {
-	const base = ` FROM classes c JOIN subjects sub ON sub.id=$1 LEFT JOIN attendance_sessions s ON s.class_id=c.id AND s.subject_id=sub.id LEFT JOIN attendance_records ar ON ar.session_id=s.id WHERE EXISTS (SELECT 1 FROM teaching_assignments ta WHERE ta.class_id=c.id AND ta.subject_id=sub.id AND ($2::uuid IS NULL OR ta.teacher_id=$2))`
+	const base = ` FROM classes c JOIN subjects sub ON ($1::uuid IS NULL OR sub.id=$1) AND EXISTS (SELECT 1 FROM teaching_assignments ta WHERE ta.class_id=c.id AND ta.subject_id=sub.id AND ($2::uuid IS NULL OR ta.teacher_id=$2)) LEFT JOIN attendance_sessions s ON s.class_id=c.id AND s.subject_id=sub.id AND ($2::uuid IS NULL OR s.teacher_id=$2) LEFT JOIN attendance_records ar ON ar.session_id=s.id`
 	var total int64
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(DISTINCT c.id)`+base, subjectID, nullableUUID(teacherID)).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM (SELECT DISTINCT c.id, sub.id`+base+`) scoped_classes`, nullableUUID(subjectID), nullableUUID(teacherID)).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	query := `SELECT c.id,c.name,c.homeroom_teacher_id,` + attendanceCountsExpr + base + ` GROUP BY c.id ORDER BY c.name LIMIT $3 OFFSET $4`
-	rows, err := r.pool.Query(ctx, query, subjectID, nullableUUID(teacherID), perPage, (page-1)*perPage)
+	query := `SELECT c.id,c.name,c.homeroom_teacher_id,sub.id,sub.name,` + attendanceCountsExpr + base + ` GROUP BY c.id, sub.id, sub.name ORDER BY c.name,sub.name LIMIT $3 OFFSET $4`
+	rows, err := r.pool.Query(ctx, query, nullableUUID(subjectID), nullableUUID(teacherID), perPage, (page-1)*perPage)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -92,7 +129,7 @@ func (r *AttendanceReportRepo) SubjectClasses(ctx context.Context, subjectID, te
 	var reports []domain.SubjectClassReport
 	for rows.Next() {
 		var report domain.SubjectClassReport
-		if err := rows.Scan(&report.Class.ID, &report.Class.Name, &report.Class.HomeroomTeacherID, &report.Counts.Present, &report.Counts.Excused, &report.Counts.Sick, &report.Counts.UnexcusedAbsent, &report.Counts.Total); err != nil {
+		if err := rows.Scan(&report.Class.ID, &report.Class.Name, &report.Class.HomeroomTeacherID, &report.Subject.ID, &report.Subject.Name, &report.Counts.Present, &report.Counts.Excused, &report.Counts.Sick, &report.Counts.UnexcusedAbsent, &report.Counts.Total); err != nil {
 			return nil, 0, err
 		}
 		report.Rate = report.Counts.AttendanceRate()
@@ -193,6 +230,11 @@ func (r *AttendanceReportRepo) IsHomeroomOfClass(ctx context.Context, teacherID,
 	var exists bool
 	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM classes WHERE id=$1 AND homeroom_teacher_id=$2)`, classID, teacherID).Scan(&exists)
 	return exists, err
+}
+
+func (r *AttendanceReportRepo) RecordActivity(ctx context.Context, actorID uuid.UUID, action, entity string, entityID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `INSERT INTO audit_events (actor_id, action, entity, entity_id) VALUES ($1, $2, $3, $4)`, actorID, action, entity, entityID)
+	return err
 }
 
 func (r *AttendanceReportRepo) Activities(ctx context.Context, page, perPage int32) ([]domain.Activity, int64, error) {

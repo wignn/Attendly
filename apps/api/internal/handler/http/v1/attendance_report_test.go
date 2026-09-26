@@ -51,6 +51,9 @@ func (r handlerReportRepo) HomeroomReport(context.Context, uuid.UUID, uuid.UUID,
 func (r handlerReportRepo) Activities(context.Context, int32, int32) ([]domain.Activity, int64, error) {
 	return r.activities, int64(len(r.activities)), nil
 }
+func (handlerReportRepo) RecordActivity(context.Context, uuid.UUID, string, string, uuid.UUID) error {
+	return nil
+}
 func (r handlerReportRepo) CanAccessSubject(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
 	return r.allowed, nil
 }

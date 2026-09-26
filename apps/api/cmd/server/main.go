@@ -61,6 +61,7 @@ func main() {
 	reportService := service.NewAttendanceReportService(postgres.NewAttendanceReportRepo(dbPool))
 	assignmentService := service.NewTeachingAssignmentService(postgres.NewTeachingAssignmentRepo(dbPool))
 	scheduleService := service.NewScheduleService(postgres.NewScheduleRepo(dbPool))
+	studentService := service.NewStudentService(postgres.NewStudentRepo(dbPool))
 
 	handlers := v1.Handlers{
 		Auth:        v1.NewAuthHandler(authService),
@@ -68,6 +69,7 @@ func main() {
 		Attendance:  v1.NewAttendanceReportHandler(reportService),
 		Assignments: v1.NewTeachingAssignmentHandler(assignmentService),
 		Schedules:   v1.NewScheduleHandler(scheduleService),
+		Student:     v1.NewStudentHandler(studentService),
 	}
 	healthHandler := v1.NewHealthHandler()
 
@@ -77,7 +79,7 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.StructuredLogger(appLogger))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8080", "*"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8080", "https://attendly-api-three.vercel.app", "*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"},
 		AllowCredentials: true,
