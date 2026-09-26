@@ -842,9 +842,9 @@ components:
         name:
           type: string
         homeroom_teacher_id:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Uuid'
-          nullable: true
+            - type: 'null'
     SubjectRecord:
       type: object
       required: [id, name]
@@ -874,9 +874,9 @@ components:
         class:
           $ref: '#/components/schemas/ClassRecord'
         subject:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/SubjectRecord'
-          nullable: true
+            - type: 'null'
         counts:
           $ref: '#/components/schemas/AttendanceCounts'
         attendance_rate:
@@ -894,9 +894,9 @@ components:
         id:
           $ref: '#/components/schemas/Uuid'
         actor_id:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Uuid'
-          nullable: true
+            - type: 'null'
         action:
           type: string
         entity:
