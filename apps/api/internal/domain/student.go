@@ -7,8 +7,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// StudentRecord is the management representation of a student. The older
-// Student type remains dedicated to attendance summary payloads.
 type StudentRecord struct {
 	ID               uuid.UUID  `json:"id"`
 	NIS              string     `json:"nis"`
@@ -32,6 +30,14 @@ type StudentEnrollment struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+type StudentUpdate struct {
+	NIS       *string
+	NISN      *string
+	ClearNISN bool
+	FullName  *string
+	Active    *bool
+}
+
 // StudentListFilter controls student management listing and pagination.
 type StudentListFilter struct {
 	Search         string
@@ -49,7 +55,7 @@ type StudentRepository interface {
 	List(context.Context, StudentListFilter) ([]StudentRecord, int64, error)
 	Get(context.Context, uuid.UUID, bool) (StudentRecord, error)
 	Create(context.Context, StudentRecord, time.Time, uuid.UUID) (StudentRecord, error)
-	Update(context.Context, StudentRecord, uuid.UUID) (StudentRecord, error)
+	Update(context.Context, uuid.UUID, StudentUpdate, uuid.UUID) (StudentRecord, error)
 	SoftDelete(context.Context, uuid.UUID, uuid.UUID) error
 	Enrollments(context.Context, uuid.UUID) ([]StudentEnrollment, error)
 	Transfer(context.Context, uuid.UUID, uuid.UUID, time.Time, uuid.UUID) (StudentRecord, error)

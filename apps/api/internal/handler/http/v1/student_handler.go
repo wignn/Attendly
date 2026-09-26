@@ -44,6 +44,28 @@ type studentResponse struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
+type studentEnrollmentResponse struct {
+	ID        uuid.UUID `json:"id"`
+	StudentID uuid.UUID `json:"student_id"`
+	ClassID   uuid.UUID `json:"class_id"`
+	ClassName string    `json:"class_name"`
+	ValidFrom string    `json:"valid_from"`
+	ValidTo   *string   `json:"valid_to,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func projectEnrollments(items []domain.StudentEnrollment) []studentEnrollmentResponse {
+	result := make([]studentEnrollmentResponse, len(items))
+	for i, item := range items {
+		result[i] = studentEnrollmentResponse{ID: item.ID, StudentID: item.StudentID, ClassID: item.ClassID, ClassName: item.ClassName, ValidFrom: item.ValidFrom.Format("2006-01-02"), CreatedAt: item.CreatedAt}
+		if item.ValidTo != nil {
+			value := item.ValidTo.Format("2006-01-02")
+			result[i].ValidTo = &value
+		}
+	}
+	return result
+}
+
 func projectStudent(record domain.StudentRecord) studentResponse {
 	status := "INACTIVE"
 	if record.Active {
@@ -75,7 +97,7 @@ type studentUpdateRequest struct {
 	NIS      *string `json:"nis"`
 	NISN     *string `json:"nisn"`
 	FullName *string `json:"full_name"`
-	Active   *bool   `json:"active"`
+	Status   *string `json:"status"`
 }
 type studentTransferRequest struct {
 	ClassID     string `json:"class_id"`
@@ -101,9 +123,14 @@ func (h *StudentHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		filter.ClassID = &id
 	}
-	if v := q.Get("active"); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
+	if v := q.Get("status"); v != "" {
+		var b bool
+		switch v {
+		case "ACTIVE":
+			b = true
+		case "INACTIVE":
+			b = false
+		default:
 			studentInvalidFilter(w)
 			return
 		}
@@ -178,7 +205,25 @@ func (h *StudentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !decodeStudentBody(w, r, &req) {
 		return
 	}
-	data, err := h.service.Update(r.Context(), middleware.GetAuthenticatedUser(r.Context()), id, service.StudentUpdateInput{NIS: req.NIS, NISN: req.NISN, FullName: req.FullName, Active: req.Active})
+	var active *bool
+	if req.Status != nil {
+		var value bool
+		switch *req.Status {
+		case "ACTIVE":
+			value = true
+		case "INACTIVE":
+			value = false
+		default:
+			studentValidation(w)
+			return
+		}
+		active = &value
+	}
+	if req.NIS == nil && req.NISN == nil && req.FullName == nil && active == nil {
+		studentValidation(w)
+		return
+	}
+	data, err := h.service.Update(r.Context(), middleware.GetAuthenticatedUser(r.Context()), id, service.StudentUpdateInput{NIS: req.NIS, NISN: req.NISN, FullName: req.FullName, Active: active})
 	if err != nil {
 		writeStudentError(w, err)
 		return
@@ -206,7 +251,7 @@ func (h *StudentHandler) Enrollments(w http.ResponseWriter, r *http.Request) {
 		writeStudentError(w, err)
 		return
 	}
-	response.Success(w, http.StatusOK, "Student enrollments retrieved", data)
+	response.Success(w, http.StatusOK, "Student enrollments retrieved", projectEnrollments(data))
 }
 func (h *StudentHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 	id, ok := studentPathID(w, r)

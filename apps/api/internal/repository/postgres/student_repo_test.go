@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,18 +38,57 @@ func studentTestDB(t *testing.T) (*pgxpool.Pool, context.Context, uuid.UUID, []u
 		}
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM attendance_records WHERE student_id IN (SELECT id FROM students WHERE full_name LIKE $1)`, "student-repo-"+actor.String()+"-%")
-		_, _ = pool.Exec(ctx, `DELETE FROM attendance_sessions WHERE teacher_id=$1`, actor)
-		_, _ = pool.Exec(ctx, `DELETE FROM audit_events WHERE actor_id=$1 OR entity_id IN (SELECT id FROM students WHERE full_name LIKE $1)`, actor, "student-repo-"+actor.String()+"-%")
-		_, _ = pool.Exec(ctx, `DELETE FROM students WHERE full_name LIKE $1`, "student-repo-"+actor.String()+"-%")
-		_, _ = pool.Exec(ctx, `DELETE FROM classes WHERE id = ANY($1)`, classIDs)
-		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, actor)
+		studentPrefix := "student-repo-" + actor.String() + "-%"
+		var studentIDs []uuid.UUID
+		rows, err := pool.Query(ctx, `SELECT id FROM students WHERE full_name LIKE $1`, studentPrefix)
+		if err != nil {
+			t.Errorf("find fixture students for cleanup: %v", err)
+			return
+		}
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				t.Errorf("scan fixture student for cleanup: %v", err)
+				rows.Close()
+				return
+			}
+			studentIDs = append(studentIDs, id)
+		}
+		if err := rows.Err(); err != nil {
+			t.Errorf("read fixture students for cleanup: %v", err)
+			rows.Close()
+			return
+		}
+		rows.Close()
+		runCleanup := func(label, query string, args ...any) {
+			if _, err := pool.Exec(ctx, query, args...); err != nil {
+				t.Errorf("cleanup %s: %v", label, err)
+			}
+		}
+		if len(studentIDs) > 0 {
+			runCleanup("student attendance", `DELETE FROM attendance_records WHERE student_id=ANY($1::uuid[])`, studentIDs)
+			runCleanup("student enrollments", `DELETE FROM student_enrollments WHERE student_id=ANY($1::uuid[])`, studentIDs)
+			runCleanup("student audit", `DELETE FROM audit_events WHERE entity_id=ANY($1::uuid[])`, studentIDs)
+			runCleanup("students", `DELETE FROM students WHERE id=ANY($1::uuid[])`, studentIDs)
+		}
+		runCleanup("actor audit", `DELETE FROM audit_events WHERE actor_id=$1`, actor)
+		runCleanup("actor sessions", `DELETE FROM attendance_sessions WHERE teacher_id=$1`, actor)
+		runCleanup("classes", `DELETE FROM classes WHERE id = ANY($1::uuid[])`, classIDs)
+		runCleanup("actor", `DELETE FROM users WHERE id=$1`, actor)
 	})
 	return pool, ctx, actor, classIDs
 }
 
 func newStudentRecord(actor, classID uuid.UUID, suffix, name string) domain.StudentRecord {
-	return domain.StudentRecord{ID: uuid.New(), NIS: "repo-" + actor.String() + "-" + suffix, FullName: "student-repo-" + actor.String() + "-" + name, CurrentClassID: classID, Active: true}
+	return domain.StudentRecord{ID: uuid.New(), NIS: "r" + strings.ReplaceAll(actor.String(), "-", "") + "-" + suffix, FullName: "student-repo-" + actor.String() + "-" + name, CurrentClassID: classID, Active: true}
+}
+
+func TestStudentPageOffsetUsesInt64(t *testing.T) {
+	got := studentPageOffset(2147483647, 100)
+	want := (int64(2147483647) - 1) * 100
+	if got != want || got <= int64(^uint32(0)>>1) {
+		t.Fatalf("offset = %d, want int64 %d", got, want)
+	}
 }
 
 func TestStudentRepoListFiltersSortsAndPaginates(t *testing.T) {
@@ -88,7 +128,8 @@ func TestStudentRepoMapsDuplicateNISAndNISN(t *testing.T) {
 	if _, err := repo.Create(ctx, first, time.Now(), actor); err != nil {
 		t.Fatal(err)
 	}
-	duplicateNIS := newStudentRecord(actor, classes[0], first.NIS, "Duplicate NIS")
+	duplicateNIS := newStudentRecord(actor, classes[0], "dup-x", "Duplicate NIS")
+	duplicateNIS.NIS = first.NIS
 	if _, err := repo.Create(ctx, duplicateNIS, time.Now(), actor); !errors.Is(err, domain.ErrDuplicateNIS) {
 		t.Fatalf("duplicate NIS error = %v", err)
 	}
@@ -99,7 +140,35 @@ func TestStudentRepoMapsDuplicateNISAndNISN(t *testing.T) {
 	}
 }
 
-func TestStudentRepoEnrollmentHistoryNewestFirst(t *testing.T) {
+func TestStudentRepoPatchUpdatePreservesOmittedFields(t *testing.T) {
+	pool, ctx, actor, classes := studentTestDB(t)
+	repo := NewStudentRepo(pool)
+	student := newStudentRecord(actor, classes[0], "patch", "Patch")
+	student.NISN = ptrString("kept-nisn")
+	if _, err := repo.Create(ctx, student, time.Now(), actor); err != nil {
+		t.Fatal(err)
+	}
+	newNIS := "updated-nis"
+	got, err := repo.Update(ctx, student.ID, domain.StudentUpdate{NIS: &newNIS}, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.NIS != newNIS || got.NISN == nil || *got.NISN != "kept-nisn" || got.FullName != student.FullName || !got.Active {
+		t.Fatalf("partial NIS update changed omitted fields: %+v", got)
+	}
+	newName := "Updated independent field"
+	got, err = repo.Update(ctx, student.ID, domain.StudentUpdate{FullName: &newName}, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.NIS != newNIS || got.FullName != newName || got.NISN == nil || *got.NISN != "kept-nisn" {
+		t.Fatalf("partial name update reset other fields: %+v", got)
+	}
+}
+
+func ptrString(value string) *string { return &value }
+
+func TestStudentRepoEnrollmentHistoryChronological(t *testing.T) {
 	pool, ctx, actor, classes := studentTestDB(t)
 	repo := NewStudentRepo(pool)
 	student := newStudentRecord(actor, classes[0], "history", "History")
@@ -116,7 +185,7 @@ func TestStudentRepoEnrollmentHistoryNewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(history) != 3 || history[0].ClassID != classes[2] || history[1].ClassID != classes[1] || history[2].ClassID != classes[0] {
+	if len(history) != 3 || history[0].ClassID != classes[0] || history[1].ClassID != classes[1] || history[2].ClassID != classes[2] {
 		t.Fatalf("history class order = %#v", history)
 	}
 }

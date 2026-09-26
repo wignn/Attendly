@@ -213,9 +213,9 @@ paths:
           description: Filter menurut kelas saat ini.
           schema:
             $ref: '#/components/schemas/Uuid'
-        - name: active
+        - name: status
           in: query
-          schema: {type: boolean}
+          schema: {type: string, enum: [ACTIVE, INACTIVE]}
         - name: include_deleted
           in: query
           description: Sertakan siswa yang dihapus lunak.
@@ -372,7 +372,7 @@ paths:
     get:
       tags: [Students]
       summary: Ambil riwayat enrollment kelas siswa
-      description: Hanya SUPER_ADMIN. Mengembalikan enrollment dari yang terbaru ke terlama.
+      description: Hanya SUPER_ADMIN. Mengembalikan enrollment secara kronologis dari yang terlama ke terbaru.
       operationId: listStudentEnrollments
       x-required-roles: [SUPER_ADMIN]
       responses:
@@ -395,7 +395,7 @@ paths:
     post:
       tags: [Students]
       summary: Pindahkan siswa ke kelas lain
-      description: Hanya SUPER_ADMIN. effective_on menerima YYYY-MM-DD; jika tidak diberikan tanggal hari ini di Asia/Jakarta digunakan.
+      description: Hanya SUPER_ADMIN. effective_on menerima YYYY-MM-DD; jika tidak diberikan tanggal hari ini di Asia/Jakarta digunakan. Tanggal masa depan ditolak; tanggal yang sama dengan awal enrollment berjalan diperbolehkan.
       operationId: transferStudentEnrollment
       x-required-roles: [SUPER_ADMIN]
       requestBody:
@@ -1226,8 +1226,9 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-        active:
-          type: boolean
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
           description: Status siswa aktif atau tidak aktif.
     StudentTransfer:
       type: object

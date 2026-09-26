@@ -17,7 +17,7 @@ type studentRepoStub struct {
 	includeDeleted                                                                             bool
 	created                                                                                    domain.StudentRecord
 	createdAt                                                                                  time.Time
-	updated                                                                                    domain.StudentRecord
+	updated                                                                                    domain.StudentUpdate
 	deletedActor                                                                               uuid.UUID
 	enrollmentActor                                                                            uuid.UUID
 	transferClass                                                                              uuid.UUID
@@ -50,11 +50,11 @@ func (r *studentRepoStub) Create(_ context.Context, record domain.StudentRecord,
 	r.transferActor = actor
 	return record, r.createErr
 }
-func (r *studentRepoStub) Update(_ context.Context, record domain.StudentRecord, actor uuid.UUID) (domain.StudentRecord, error) {
+func (r *studentRepoStub) Update(_ context.Context, _ uuid.UUID, record domain.StudentUpdate, actor uuid.UUID) (domain.StudentRecord, error) {
 	r.updateCalls++
 	r.updated = record
 	r.transferActor = actor
-	return record, r.updateErr
+	return r.student, r.updateErr
 }
 func (r *studentRepoStub) SoftDelete(_ context.Context, _ uuid.UUID, actor uuid.UUID) error {
 	r.deleteCalls++
@@ -176,8 +176,8 @@ func TestStudentServiceUpdateMergesOptionalNISNAndRejectsClassChange(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if repo.updated.NISN == nil || *repo.updated.NISN != "abc" || repo.updated.FullName != "New" {
-		t.Fatalf("omitted NISN not preserved / name not normalized: %+v", repo.updated)
+	if repo.updated.NISN != nil || repo.updated.ClearNISN || repo.updated.FullName == nil || *repo.updated.FullName != "New" {
+		t.Fatalf("patch should only contain normalized name: %+v", repo.updated)
 	}
 	if repo.transferActor != actor.ID {
 		t.Fatalf("update actor=%s, want %s", repo.transferActor, actor.ID)
@@ -196,18 +196,18 @@ func TestStudentServiceUpdateNISNClearAndStatusTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if repo.updated.NISN != nil {
-		t.Fatalf("empty NISN must clear value, got %v", *repo.updated.NISN)
+	if !repo.updated.ClearNISN {
+		t.Fatalf("empty NISN must request clearing: %+v", repo.updated)
 	}
 	repo = &studentRepoStub{student: domain.StudentRecord{ID: id, NIS: "1", FullName: "Ada", Active: true}}
 	_, err = NewStudentService(repo).Update(context.Background(), adminUser(), id, StudentUpdateInput{Active: boolPtr(false)})
-	if err != nil || repo.updated.Active {
+	if err != nil || repo.updated.Active == nil || *repo.updated.Active {
 		t.Fatalf("deactivation: record=%+v err=%v", repo.updated, err)
 	}
 	repo.student = domain.StudentRecord{ID: id, NIS: "1", FullName: "Ada", Active: false}
 	_, err = NewStudentService(repo).Update(context.Background(), adminUser(), id, StudentUpdateInput{Active: boolPtr(true)})
-	if err != nil || !repo.updated.Active {
-		t.Fatalf("reactivation: record=%+v err=%v", repo.updated, err)
+	if err != nil || repo.updated.Active == nil || !*repo.updated.Active {
+		t.Fatalf("reactivation: patch=%+v err=%v", repo.updated, err)
 	}
 	repo.student.DeletedAt = timePtr(time.Now())
 	_, err = NewStudentService(repo).Update(context.Background(), adminUser(), id, StudentUpdateInput{Active: boolPtr(true)})
@@ -295,7 +295,17 @@ func TestStudentServiceTransferValidatesAndPassesActorAndDate(t *testing.T) {
 	if !errors.Is(err, domain.ErrValidation) || repo.transferCalls != 0 {
 		t.Fatalf("zero date error=%v calls=%d", err, repo.transferCalls)
 	}
+	future := time.Now().AddDate(0, 0, 2)
+	_, err = NewStudentService(repo).Transfer(context.Background(), adminUser(), id, StudentTransferInput{ClassID: classID, EffectiveOn: timePtr(future)})
+	if !errors.Is(err, domain.ErrValidation) || repo.transferCalls != 0 {
+		t.Fatalf("future date error=%v calls=%d", err, repo.transferCalls)
+	}
 	repo.history = []domain.StudentEnrollment{{ClassID: repo.student.CurrentClassID, ValidFrom: start}}
+	_, err = svc.Transfer(context.Background(), actor, id, StudentTransferInput{ClassID: classID, EffectiveOn: timePtr(start)})
+	if err != nil || repo.transferCalls != 1 {
+		t.Fatalf("same-day boundary transfer err=%v calls=%d", err, repo.transferCalls)
+	}
+	repo.transferCalls = 0
 	_, err = svc.Transfer(context.Background(), actor, id, StudentTransferInput{ClassID: classID})
 	if err != nil {
 		t.Fatal(err)
@@ -309,6 +319,27 @@ func TestStudentServiceTransferValidatesAndPassesActorAndDate(t *testing.T) {
 	}
 	if repo.transferDate.UTC().Format("2006-01-02") != time.Now().In(loc).Format("2006-01-02") {
 		t.Fatalf("UTC serialization changed transfer date: %v", repo.transferDate)
+	}
+}
+
+func TestStudentServiceUpdateRejectsEmptyPatch(t *testing.T) {
+	repo := &studentRepoStub{}
+	_, err := NewStudentService(repo).Update(context.Background(), adminUser(), uuid.New(), StudentUpdateInput{})
+	if !errors.Is(err, domain.ErrValidation) || repo.updateCalls != 0 || repo.getCalls != 0 {
+		t.Fatalf("empty patch error=%v update=%d get=%d", err, repo.updateCalls, repo.getCalls)
+	}
+}
+
+func TestStudentServiceUpdatePatchContainsOnlySuppliedField(t *testing.T) {
+	id := uuid.New()
+	repo := &studentRepoStub{student: domain.StudentRecord{ID: id, NIS: "N-1", NISN: strPtr("X"), FullName: "Ada", Active: true}}
+	newName := "Grace"
+	_, err := NewStudentService(repo).Update(context.Background(), adminUser(), id, StudentUpdateInput{FullName: &newName})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.updated.NIS != nil || repo.updated.NISN != nil || repo.updated.ClearNISN || repo.updated.Active != nil || repo.updated.FullName == nil || *repo.updated.FullName != "Grace" {
+		t.Fatalf("update patch contains omitted fields: %+v", repo.updated)
 	}
 }
 

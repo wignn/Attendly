@@ -24,7 +24,7 @@ CREATE TABLE student_enrollments (
     valid_from DATE NOT NULL,
     valid_to DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT student_enrollments_valid_range CHECK (valid_to IS NULL OR valid_to > valid_from)
+    CONSTRAINT student_enrollments_valid_range CHECK (valid_to IS NULL OR valid_to >= valid_from)
 );
 
 INSERT INTO student_enrollments (student_id, class_id, valid_from)

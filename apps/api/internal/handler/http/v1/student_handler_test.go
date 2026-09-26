@@ -74,6 +74,7 @@ func assertStudentStatus(t *testing.T, handler http.HandlerFunc, method, path, b
 func TestStudentHandlerCRUDHistoryAndTransferEnvelopes(t *testing.T) {
 	rec := studentRecord()
 	date := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	validTo := date.AddDate(0, 0, 3)
 	stub := studentServiceStub{
 		list: func(_ context.Context, _ *domain.User, f domain.StudentListFilter) ([]domain.StudentRecord, int64, error) {
 			if f.Page != 2 || f.PerPage != 10 || f.Search != "mia" || f.SortBy != "nis" || f.SortOrder != "desc" {
@@ -96,7 +97,7 @@ func TestStudentHandlerCRUDHistoryAndTransferEnvelopes(t *testing.T) {
 		},
 		delete: func(context.Context, *domain.User, uuid.UUID) error { return nil },
 		enrollments: func(context.Context, *domain.User, uuid.UUID) ([]domain.StudentEnrollment, error) {
-			return []domain.StudentEnrollment{{ID: uuid.New(), StudentID: rec.ID, ClassID: rec.CurrentClassID, ClassName: "Class A", ValidFrom: date}}, nil
+			return []domain.StudentEnrollment{{ID: uuid.New(), StudentID: rec.ID, ClassID: rec.CurrentClassID, ClassName: "Class A", ValidFrom: date, ValidTo: &validTo, CreatedAt: date.Add(12 * time.Hour)}}, nil
 		},
 		transfer: func(_ context.Context, _ *domain.User, _ uuid.UUID, i service.StudentTransferInput) (domain.StudentRecord, error) {
 			if i.ClassID == uuid.Nil || i.EffectiveOn == nil || !i.EffectiveOn.Equal(date) {
@@ -140,6 +141,49 @@ func TestStudentHandlerCRUDHistoryAndTransferEnvelopes(t *testing.T) {
 				}
 			}
 		})
+	}
+	history := assertStudentStatus(t, h.Enrollments, "GET", "/students/"+id+"/enrollments", "", http.StatusOK)
+	for _, field := range []string{`"valid_from":"2026-09-26"`, `"valid_to":"2026-09-29"`, `"created_at":"2026-09-26T12:00:00Z"`} {
+		if !strings.Contains(history.Body.String(), field) {
+			t.Errorf("enrollment response missing %s: %s", field, history.Body.String())
+		}
+	}
+}
+
+func TestStudentHandlerStatusFilterAndRejectsInvalidOrEmptyUpdate(t *testing.T) {
+	var seen []bool
+	h := NewStudentHandler(studentServiceStub{
+		list: func(_ context.Context, _ *domain.User, f domain.StudentListFilter) ([]domain.StudentRecord, int64, error) {
+			if f.Active == nil {
+				t.Error("status filter was not passed")
+			} else {
+				seen = append(seen, *f.Active)
+			}
+			return nil, 0, nil
+		},
+		update: func(context.Context, *domain.User, uuid.UUID, service.StudentUpdateInput) (domain.StudentRecord, error) {
+			t.Fatal("empty/invalid update reached service")
+			return domain.StudentRecord{}, nil
+		},
+	})
+	for _, value := range []string{"ACTIVE", "INACTIVE"} {
+		rec := assertStudentStatus(t, h.List, "GET", "/students?status="+value, "", http.StatusOK)
+		if rec.Code != http.StatusOK {
+			t.Fatal(rec.Body.String())
+		}
+	}
+	invalid := assertStudentStatus(t, h.List, "GET", "/students?status=active", "", http.StatusBadRequest)
+	if !strings.Contains(invalid.Body.String(), `"code":"INVALID_FILTER"`) {
+		t.Fatal(invalid.Body.String())
+	}
+	for _, body := range []string{`{}`, `{"status":"disabled"}`} {
+		rec := assertStudentStatus(t, h.Update, "PATCH", "/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", body, http.StatusBadRequest)
+		if !strings.Contains(rec.Body.String(), `"code":"VALIDATION_FAILED"`) {
+			t.Fatal(rec.Body.String())
+		}
+	}
+	if len(seen) != 2 || !seen[0] || seen[1] {
+		t.Fatalf("active filters=%v", seen)
 	}
 }
 
@@ -293,7 +337,7 @@ func TestRegisterRoutesUsesCanonicalStudentPaths(t *testing.T) {
 		{"list", http.MethodGet, "/api/v1/students", "", http.StatusOK},
 		{"create", http.MethodPost, "/api/v1/students", `{"nis":"N1","full_name":"Student","class_id":"f0fd2655-74e3-4b47-9c89-2ff2f21d9c8f"}`, http.StatusCreated},
 		{"detail", http.MethodGet, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", "", http.StatusOK},
-		{"update", http.MethodPatch, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", `{"active":false}`, http.StatusOK},
+		{"update", http.MethodPatch, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", `{"status":"INACTIVE"}`, http.StatusOK},
 		{"delete", http.MethodDelete, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426", "", http.StatusOK},
 		{"enrollment history", http.MethodGet, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426/enrollments", "", http.StatusOK},
 		{"enrollment transfer", http.MethodPost, "/api/v1/students/65c33d29-65e2-4d1b-9a82-d814f9c19426/enrollments", `{"class_id":"f0fd2655-74e3-4b47-9c89-2ff2f21d9c8f"}`, http.StatusCreated},

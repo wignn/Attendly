@@ -114,6 +114,9 @@ func (s *StudentService) Update(ctx context.Context, user *domain.User, id uuid.
 	if input.ClassID != nil {
 		return domain.StudentRecord{}, domain.ErrValidation
 	}
+	if input.NIS == nil && input.NISN == nil && input.FullName == nil && input.Active == nil {
+		return domain.StudentRecord{}, domain.ErrValidation
+	}
 	current, err := s.repo.Get(ctx, id, true)
 	if err != nil {
 		return domain.StudentRecord{}, err
@@ -124,29 +127,33 @@ func (s *StudentService) Update(ctx context.Context, user *domain.User, id uuid.
 		}
 		return domain.StudentRecord{}, domain.ErrNotFound
 	}
+	patch := domain.StudentUpdate{Active: input.Active}
 	if input.NIS != nil {
-		current.NIS = strings.TrimSpace(*input.NIS)
-		if current.NIS == "" || len(current.NIS) > 50 {
+		value := strings.TrimSpace(*input.NIS)
+		if value == "" || len(value) > 50 {
 			return domain.StudentRecord{}, domain.ErrValidation
 		}
+		patch.NIS = &value
 	}
 	if input.NISN != nil {
 		nisn, err := normalizeOptionalIdentifier(input.NISN)
 		if err != nil {
 			return domain.StudentRecord{}, err
 		}
-		current.NISN = nisn
-	}
-	if input.FullName != nil {
-		current.FullName = strings.TrimSpace(*input.FullName)
-		if current.FullName == "" || len(current.FullName) > 255 {
-			return domain.StudentRecord{}, domain.ErrValidation
+		if nisn == nil {
+			patch.ClearNISN = true
+		} else {
+			patch.NISN = nisn
 		}
 	}
-	if input.Active != nil {
-		current.Active = *input.Active
+	if input.FullName != nil {
+		value := strings.TrimSpace(*input.FullName)
+		if value == "" || len(value) > 255 {
+			return domain.StudentRecord{}, domain.ErrValidation
+		}
+		patch.FullName = &value
 	}
-	return s.repo.Update(ctx, current, user.ID)
+	return s.repo.Update(ctx, id, patch, user.ID)
 }
 
 func (s *StudentService) SoftDelete(ctx context.Context, user *domain.User, id uuid.UUID) error {
@@ -190,6 +197,11 @@ func (s *StudentService) Transfer(ctx context.Context, user *domain.User, id uui
 	effectiveOn, err := schoolDate(input.EffectiveOn)
 	if err != nil {
 		return domain.StudentRecord{}, err
+	}
+	location, _ := time.LoadLocation("Asia/Jakarta")
+	today := time.Now().In(location)
+	if dateBefore(time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, location), effectiveOn) {
+		return domain.StudentRecord{}, domain.ErrValidation
 	}
 	history, err := s.repo.Enrollments(ctx, id)
 	if err != nil {

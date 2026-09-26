@@ -74,7 +74,8 @@ func (r *StudentRepo) List(ctx context.Context, filter domain.StudentListFilter)
 	if filter.PerPage < 1 {
 		filter.PerPage = 20
 	}
-	args = append(args, filter.PerPage, (filter.Page-1)*filter.PerPage)
+	offset := studentPageOffset(filter.Page, filter.PerPage)
+	args = append(args, filter.PerPage, offset)
 	query := `SELECT ` + studentColumns + studentFrom + clause + fmt.Sprintf(" ORDER BY %s %s,s.id ASC LIMIT $%d OFFSET $%d", sortColumn, direction, len(args)-1, len(args))
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -132,29 +133,64 @@ func (r *StudentRepo) Create(ctx context.Context, student domain.StudentRecord, 
 	return student, nil
 }
 
-func (r *StudentRepo) Update(ctx context.Context, student domain.StudentRecord, actorID uuid.UUID) (domain.StudentRecord, error) {
+func (r *StudentRepo) Update(ctx context.Context, id uuid.UUID, patch domain.StudentUpdate, actorID uuid.UUID) (domain.StudentRecord, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.StudentRecord{}, err
 	}
 	defer tx.Rollback(ctx)
-	result, err := tx.Exec(ctx, `UPDATE students SET student_number=$2,nisn=$3,full_name=$4,active=$5,updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL`, student.ID, student.NIS, student.NISN, student.FullName, student.Active)
+	result, err := tx.Exec(ctx, `UPDATE students SET
+		student_number=CASE WHEN $2::boolean THEN $3 ELSE student_number END,
+		nisn=CASE WHEN $4::boolean THEN $5 ELSE CASE WHEN $6::boolean THEN NULL ELSE nisn END END,
+		full_name=CASE WHEN $7::boolean THEN $8 ELSE full_name END,
+		active=CASE WHEN $9::boolean THEN $10 ELSE active END,
+		updated_at=NOW()
+		WHERE id=$1 AND deleted_at IS NULL`, id,
+		patch.NIS != nil, optionalStringValue(patch.NIS),
+		patch.NISN != nil, optionalStringValue(patch.NISN), patch.ClearNISN,
+		patch.FullName != nil, optionalStringValue(patch.FullName),
+		patch.Active != nil, optionalBoolValue(patch.Active))
 	if err != nil {
 		return domain.StudentRecord{}, mapStudentWriteError(err)
 	}
 	if result.RowsAffected() == 0 {
 		return domain.StudentRecord{}, domain.ErrNotFound
 	}
-	if err = insertStudentAudit(ctx, tx, actorID, "UPDATE", student.ID); err != nil {
+	if err = insertStudentAudit(ctx, tx, actorID, "UPDATE", id); err != nil {
 		return domain.StudentRecord{}, err
 	}
-	if err = tx.QueryRow(ctx, `SELECT `+studentColumns+studentFrom+` WHERE s.id=$1`, student.ID).Scan(&student.ID, &student.NIS, &student.NISN, &student.FullName, &student.CurrentClassID, &student.CurrentClassName, &student.Active, &student.DeletedAt, &student.CreatedAt, &student.UpdatedAt); err != nil {
+	student, err := scanStudent(tx.QueryRow(ctx, `SELECT `+studentColumns+studentFrom+` WHERE s.id=$1`, id))
+	if err != nil {
 		return domain.StudentRecord{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return domain.StudentRecord{}, err
 	}
 	return student, nil
+}
+
+func optionalStringValue(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func optionalBoolValue(value *bool) any {
+	if value == nil {
+		return false
+	}
+	return *value
+}
+
+func studentPageOffset(page, perPage int32) int64 {
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	return (int64(page) - 1) * int64(perPage)
 }
 
 func (r *StudentRepo) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
@@ -180,7 +216,7 @@ func (r *StudentRepo) Enrollments(ctx context.Context, id uuid.UUID) ([]domain.S
 	if _, err := r.Get(ctx, id, true); err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT e.id,e.student_id,e.class_id,c.name,e.valid_from,e.valid_to,e.created_at FROM student_enrollments e JOIN classes c ON c.id=e.class_id WHERE e.student_id=$1 ORDER BY e.valid_from DESC,e.id`, id)
+	rows, err := r.pool.Query(ctx, `SELECT e.id,e.student_id,e.class_id,c.name,e.valid_from,e.valid_to,e.created_at FROM student_enrollments e JOIN classes c ON c.id=e.class_id WHERE e.student_id=$1 ORDER BY e.valid_from ASC,e.id`, id)
 	if err != nil {
 		return nil, err
 	}
