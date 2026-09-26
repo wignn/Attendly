@@ -65,6 +65,9 @@ func main() {
 	attendanceSessionService := service.NewAttendanceSessionService(postgres.NewAttendanceSessionRepo(dbPool))
 	subjectService := service.NewSubjectService(postgres.NewSubjectRepo(dbPool))
 	academicYearService := service.NewAcademicYearService(postgres.NewAcademicYearRepo(dbPool))
+	teacherService := service.NewTeacherService(postgres.NewTeacherRepo(dbPool))
+	classService := service.NewClassService(postgres.NewClassRepo(dbPool))
+	exportAuditService := service.NewExportAuditService(postgres.NewExportAuditRepo(dbPool))
 
 	handlers := v1.Handlers{
 		Auth:              v1.NewAuthHandler(authService),
@@ -76,6 +79,9 @@ func main() {
 		AttendanceSession: v1.NewAttendanceSessionHandler(attendanceSessionService),
 		Subject:           v1.NewSubjectHandler(subjectService),
 		AcademicYear:      v1.NewAcademicYearHandler(academicYearService),
+		Teacher:           v1.NewTeacherHandler(teacherService),
+		Class:             v1.NewClassHandler(classService),
+		ExportAudit:       v1.NewExportAuditHandler(exportAuditService),
 	}
 	healthHandler := v1.NewHealthHandler()
 
