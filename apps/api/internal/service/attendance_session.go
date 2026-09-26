@@ -63,7 +63,6 @@ func (s *AttendanceSessionService) CreateOrGet(ctx context.Context, user *domain
 	}
 
 	if in.ClassID != nil && *in.ClassID != uuid.Nil && in.SubjectID != nil && *in.SubjectID != uuid.Nil {
-		teacherID := user.ID
 		if !attendanceAdmin(user) {
 			allowed, err := s.repo.CanTeachClassSubject(ctx, user.ID, *in.ClassID, *in.SubjectID)
 			if err != nil {
