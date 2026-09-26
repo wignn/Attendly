@@ -93,7 +93,7 @@ func (r *AttendanceReportRepo) HomeroomDashboard(ctx context.Context, teacherID 
 }
 
 func (r *AttendanceReportRepo) teacherCounts(ctx context.Context, teacherID uuid.UUID) (domain.AttendanceCounts, int64, error) {
-	query := `SELECT ` + attendanceCountsExpr + ` FROM attendance_records ar JOIN attendance_sessions s ON s.id = ar.session_id JOIN teaching_assignments ta ON ta.class_id=s.class_id AND ta.subject_id=s.subject_id AND ta.teacher_id=s.teacher_id WHERE ta.teacher_id=$1 AND s.held_at::date=CURRENT_DATE`
+	query := `SELECT ` + attendanceCountsExpr + ` FROM attendance_records ar JOIN attendance_sessions s ON s.id = ar.session_id WHERE s.teacher_id=$1 AND s.held_at::date=CURRENT_DATE AND EXISTS (SELECT 1 FROM teaching_assignments ta WHERE ta.class_id=s.class_id AND ta.subject_id=s.subject_id AND ta.teacher_id=s.teacher_id)`
 	var counts domain.AttendanceCounts
 	err := scanCounts(r.pool.QueryRow(ctx, query, teacherID), &counts)
 	return counts, 0, err
@@ -210,13 +210,13 @@ func (r *AttendanceReportRepo) classReport(ctx context.Context, classID uuid.UUI
 
 func (r *AttendanceReportRepo) CanAccessSubject(ctx context.Context, teacherID, subjectID uuid.UUID) (bool, error) {
 	var exists bool
-	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM teaching_assignments WHERE teacher_id=$1 AND subject_id=$2)`, teacherID, subjectID).Scan(&exists)
+	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM teaching_assignments WHERE teacher_id=$1 AND subject_id=$2 AND active)`, teacherID, subjectID).Scan(&exists)
 	return exists, err
 }
 
 func (r *AttendanceReportRepo) IsAssignedToClassSubject(ctx context.Context, teacherID, classID, subjectID uuid.UUID) (bool, error) {
 	var exists bool
-	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM teaching_assignments WHERE teacher_id=$1 AND class_id=$2 AND subject_id=$3)`, teacherID, classID, subjectID).Scan(&exists)
+	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM teaching_assignments WHERE teacher_id=$1 AND class_id=$2 AND subject_id=$3 AND active)`, teacherID, classID, subjectID).Scan(&exists)
 	return exists, err
 }
 

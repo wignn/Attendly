@@ -59,13 +59,17 @@ func main() {
 	authService := service.NewAuthService(userRepo, tokenMaker, cfg, refreshSessionRepo)
 	userService := service.NewUserService(userRepo)
 	reportService := service.NewAttendanceReportService(postgres.NewAttendanceReportRepo(dbPool))
+	assignmentService := service.NewTeachingAssignmentService(postgres.NewTeachingAssignmentRepo(dbPool))
+	scheduleService := service.NewScheduleService(postgres.NewScheduleRepo(dbPool))
 	studentService := service.NewStudentService(postgres.NewStudentRepo(dbPool))
 
 	handlers := v1.Handlers{
-		Auth:       v1.NewAuthHandler(authService),
-		User:       v1.NewUserHandler(userService),
-		Attendance: v1.NewAttendanceReportHandler(reportService),
-		Student:    v1.NewStudentHandler(studentService),
+		Auth:        v1.NewAuthHandler(authService),
+		User:        v1.NewUserHandler(userService),
+		Attendance:  v1.NewAttendanceReportHandler(reportService),
+		Assignments: v1.NewTeachingAssignmentHandler(assignmentService),
+		Schedules:   v1.NewScheduleHandler(scheduleService),
+		Student:     v1.NewStudentHandler(studentService),
 	}
 	healthHandler := v1.NewHealthHandler()
 
@@ -87,6 +91,10 @@ func main() {
 		_, _ = w.Write(docs.OpenAPI)
 	})
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/openapi.yaml")))
+	r.Get("/redoc", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>AbsenKu API Reference</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><redoc spec-url="/swagger/openapi.yaml"></redoc><script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script></body></html>`))
+	})
 	v1.RegisterRoutes(r, handlers, tokenMaker, redisClient, userRepo)
 
 	server := &http.Server{
