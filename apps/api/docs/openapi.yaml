@@ -170,6 +170,20 @@ paths:
       tags: [Teachers]
       summary: Daftar guru
       operationId: listTeachers
+      security:
+        - bearerAuth: []
+      x-required-roles: [SUPER_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: q
+          in: query
+          description: Cari berdasarkan nama atau NIP guru.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter menurut status akun guru.
+          schema: { type: string, enum: [ACTIVE, INACTIVE] }
       responses:
         '200':
           description: Berhasil
@@ -177,10 +191,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedTeachers'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Teachers]
       summary: Tambah guru
       operationId: createTeacher
+      security:
+        - bearerAuth: []
+      x-required-roles: [SUPER_ADMIN]
       requestBody:
         required: true
         content:
@@ -514,6 +534,11 @@ paths:
       parameters:
         - name: q
           in: query
+          description: Cari berdasarkan nama kelas atau kode.
+          schema: { type: string }
+        - name: grade
+          in: query
+          description: Filter menurut tingkat kelas (mis. VII, VIII, IX atau 7, 8, 9).
           schema: { type: string }
         - name: academic_year_id
           in: query
@@ -2009,6 +2034,10 @@ components:
         total_teachers:
           type: integer
           format: int64
+        active_classes:
+          type: integer
+          format: int64
+          description: Jumlah kelas aktif pada tahun ajaran berjalan.
         attendance:
           $ref: '#/components/schemas/AttendanceCounts'
         attendance_rate_today:
@@ -2232,6 +2261,8 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/Uuid'
+        user_id:
+          $ref: '#/components/schemas/Uuid'
         nip:
           type: string
         full_name:
@@ -2239,8 +2270,17 @@ components:
         email:
           type: string
           format: email
+        phone:
+          type: string
         status:
           $ref: '#/components/schemas/EntityStatus'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
     TeacherCreate:
       type: object
       required: [nip, full_name, email]
@@ -2252,6 +2292,27 @@ components:
         email:
           type: string
           format: email
+        phone:
+          type: string
+        password:
+          type: string
+          format: password
+    TeacherUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        nip:
+          type: string
+        full_name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
     Student:
       type: object
       description: Data siswa untuk pengelolaan. Penghapusan lunak mengisi deleted_at dan membuat active false tanpa menghapus riwayat kehadiran.
@@ -2265,6 +2326,10 @@ components:
           type: [string, 'null']
         full_name:
           type: string
+        gender:
+          type: [string, 'null']
+          enum: [MALE, FEMALE]
+          description: Jenis kelamin siswa (MALE = Laki-laki, FEMALE = Perempuan).
         class_id:
           $ref: '#/components/schemas/Uuid'
         current_class_name:
@@ -2295,6 +2360,10 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+        gender:
+          type: [string, 'null']
+          enum: [MALE, FEMALE]
+          description: Jenis kelamin siswa (MALE = Laki-laki, FEMALE = Perempuan).
         class_id:
           $ref: '#/components/schemas/Uuid'
         effective_on:
@@ -2317,6 +2386,10 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+        gender:
+          type: [string, 'null']
+          enum: [MALE, FEMALE]
+          description: Jenis kelamin siswa (MALE = Laki-laki, FEMALE = Perempuan).
         status:
           type: string
           enum: [ACTIVE, INACTIVE]
@@ -2566,6 +2639,9 @@ components:
           type: string
         name:
           type: string
+        category:
+          type: string
+          description: Kelompok kurikulum mapel (mis. Umum, Wajib, Muatan Lokal).
     SubjectUpdateRequest:
       type: object
       properties:
@@ -2573,6 +2649,9 @@ components:
           type: string
         name:
           type: string
+        category:
+          type: string
+          description: Kelompok kurikulum mapel (mis. Umum, Wajib, Muatan Lokal).
     SubjectDetail:
       type: object
       properties:
@@ -2583,6 +2662,9 @@ components:
           type: string
         name:
           type: string
+        category:
+          type: string
+          description: Kelompok kurikulum mapel (mis. Umum, Wajib, Muatan Lokal).
         created_at:
           type: string
           format: date-time
@@ -2836,6 +2918,9 @@ components:
           format: uuid
         actor_name:
           type: string
+        actor_role:
+          type: string
+          description: Peran pengguna saat melakukan aktivitas (e.g. SUPER_ADMIN, TEACHER).
         action:
           type: string
         entity:
@@ -2845,6 +2930,9 @@ components:
           format: uuid
         details:
           type: object
+        ip_address:
+          type: string
+          description: Alamat IP saat pengguna melakukan aksi.
         created_at:
           type: string
           format: date-time
@@ -2864,3 +2952,5 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/AuditLogRecord'
+
+
