@@ -22,6 +22,7 @@ COPY --from=deps /app/packages ./packages
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_OUTPUT=standalone
 
 RUN pnpm --filter=@komas/web build
 
