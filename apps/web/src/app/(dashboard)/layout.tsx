@@ -6,7 +6,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { AttendanceDateProvider } from "@/context/attendance-date-context";
 import { useAuthRole } from "@/context/auth-role-context";
 import { usePathname, useRouter } from "next/navigation";
-mport { TeachingSessionsProvider } from "@/context/teaching-sessions-context";
+import { TeachingSessionsProvider } from "@/context/teaching-sessions-context";
 
 export default function DashboardLayout({
   children,
