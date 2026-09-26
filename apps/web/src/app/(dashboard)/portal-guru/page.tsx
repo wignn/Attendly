@@ -4,173 +4,162 @@ import * as React from "react";
 import Link from "next/link";
 import { useAuthRole } from "@/context/auth-role-context";
 import { useAttendanceDate } from "@/context/attendance-date-context";
+import { useTeachingSessions } from "@/context/teaching-sessions-context";
 import {
   CalendarDays,
   Clock,
-  MapPin,
   Users,
   CheckCircle2,
-  AlertCircle,
   ArrowRight,
-  BookOpen,
-  Award,
-  Sparkles,
 } from "lucide-react";
 
 export default function PortalGuruPage() {
-  const { currentUser, activeRole } = useAuthRole();
-  const { activeDate, activeDayName } = useAttendanceDate();
+  const { currentUser } = useAuthRole();
+  const { activeDate, activeDayName, fullDisplayDate, changeActiveDate } =
+    useAttendanceDate();
+  const { scheduleData } = useTeachingSessions();
 
-  const schedules = [
-    {
-      id: "sch-1",
-      subject: currentUser.subject || "Bahasa Indonesia",
-      classCode: "Kelas 7B",
-      time: "07.40 - 09.00 WIB",
-      room: "Ruang Kelas 7B (Lantai 2)",
-      totalStudents: 32,
-      attended: 30,
-      status: "Berlangsung",
-      statusColor: "emerald",
-      badge: "Sesi Aktif",
-    },
-    {
-      id: "sch-2",
-      subject: currentUser.subject || "Bahasa Indonesia",
-      classCode: "Kelas 8A",
-      time: "09.15 - 10.45 WIB",
-      room: "Ruang Kelas 8A (Lantai 1)",
-      totalStudents: 30,
-      attended: 0,
-      status: "Mendatang",
-      statusColor: "amber",
-      badge: "Jam Ke-2",
-    },
-    {
-      id: "sch-3",
-      subject: currentUser.subject || "Bahasa Indonesia",
-      classCode: "Kelas 9C",
-      time: "10.45 - 12.05 WIB",
-      room: "Ruang Kelas 9C (Lantai 2)",
-      totalStudents: 31,
-      attended: 0,
-      status: "Mendatang",
-      statusColor: "slate",
-      badge: "Jam Ke-3",
-    },
-  ];
+  const activeSubject = currentUser.subject || "Bahasa Indonesia";
+
+  // Get current day's sessions from shared context
+  const currentDaySessions = React.useMemo(() => {
+    return scheduleData[activeDayName] || scheduleData["Rabu"] || [];
+  }, [scheduleData, activeDayName]);
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="bg-gradient-to-r from-[#0c3960] to-[#144f82] rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-bold border border-white/15">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Portal Presensi Guru & Wali Kelas</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Selamat Datang, {currentUser.name}!
+    <div className="space-y-6 max-w-6xl mx-auto py-2">
+      {/* =========================================================================
+          1. HEADER CARD (SESUAI GAMBAR REFERENSI PENGGUNA)
+      ========================================================================== */}
+      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Jadwal & Presensi Mata Pelajaran
           </h1>
-          <p className="text-sm text-slate-300 max-w-xl">
-            Hari ini <span className="font-bold text-amber-300">{activeDayName}, {activeDate}</span>. Anda memiliki <span className="font-bold text-white">3 jadwal tatap muka</span> di kelas.
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Pilih tanggal dan klik salah satu kartu kelas di bawah untuk langsung mengabsen siswa.
           </p>
         </div>
 
-        {currentUser.homeroomClass && (
-          <div className="bg-white/10 backdrop-blur-xs border border-white/15 rounded-2xl p-4 shrink-0 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-400 text-[#0c3960] flex items-center justify-center font-bold text-xl shadow">
-              <Award className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold text-amber-300 uppercase tracking-wide">
-                Wali Kelas Binaan
-              </div>
-              <div className="text-base font-extrabold text-white">
-                Kelas {currentUser.homeroomClass}
-              </div>
-              <div className="text-[11px] text-slate-300">
-                32 Siswa • 94% Kehadiran Rombel
-              </div>
-            </div>
+        {/* Input Tanggal Sesi Minimalis */}
+        <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white border border-slate-200 shadow-xs self-start md:self-auto shrink-0">
+          <span className="text-xs text-slate-500 font-semibold">
+            Tanggal Sesi:
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={activeDate}
+              onChange={(e) => changeActiveDate(e.target.value)}
+              className="text-xs font-bold text-slate-800 focus:outline-hidden cursor-pointer bg-transparent"
+            />
+            <CalendarDays className="w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Sesi Mengajar Hari Ini */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Jadwal Mengajar Tatap Muka Hari Ini
-            </h2>
-            <p className="text-xs text-slate-500">
-              Pilih kelas untuk memulai atau memeriksa presensi siswa per jam pelajaran
-            </p>
-          </div>
-          <span className="text-xs font-bold text-[#0c3960] bg-amber-100/70 border border-amber-200 px-3 py-1 rounded-xl">
-            {activeDayName}
-          </span>
-        </div>
+      {/* =========================================================================
+          2. BANNER NOTIFIKASI MINT (SESUAI GAMBAR REFERENSI PENGGUNA)
+      ========================================================================== */}
+      <div className="bg-[#eefcf5] border border-[#a3e6cd] rounded-2xl p-4 sm:px-5 sm:py-3.5 flex items-center gap-3 shadow-xs">
+        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+        <p className="text-xs sm:text-sm text-slate-700 leading-normal">
+          <strong className="text-emerald-900">
+            Simulasi Jadwal Rotasi Mengajar:
+          </strong>{" "}
+          Tanggal <strong>{fullDisplayDate || activeDate}</strong> memuat{" "}
+          <strong>
+            {currentDaySessions.length} kelas aktif {activeSubject}
+          </strong>{" "}
+          di bawah ini.
+        </p>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {schedules.map((sch) => (
-            <div
-              key={sch.id}
-              className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4 flex flex-col justify-between"
+      {/* Opsional: Tugas Tambahan Wali Kelas (HANYA tampil jika punya penugasan) */}
+      {currentUser.homeroomClass && (
+        <div className="bg-amber-50/80 border border-amber-200 rounded-2xl px-5 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 text-xs text-slate-700">
+            <span className="w-6 h-6 rounded-lg bg-amber-400 text-[#0c3960] font-black flex items-center justify-center text-[10px]">
+              {currentUser.homeroomClass}
+            </span>
+            <span>
+              Anda juga bertugas sebagai <strong>Wali Kelas {currentUser.homeroomClass}</strong>.
+            </span>
+          </div>
+          <Link
+            href="/siswa"
+            className="text-xs font-bold text-[#0c3960] hover:underline flex items-center gap-1 shrink-0"
+          >
+            <span>Buka Rekap Siswa Binaan</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
+
+      {/* =========================================================================
+          3. KARTU SESI KELAS DUA-WARNA (KLIK LANGSUNG KE HALAMAN BARU)
+      ========================================================================== */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {currentDaySessions.map((sess) => {
+          const isDone = sess.status === "Selesai";
+
+          return (
+            <Link
+              key={sess.id}
+              href={`/portal-guru/${sess.id}`}
+              className="rounded-2xl overflow-hidden border border-slate-200 hover:border-[#0c3960] hover:ring-2 hover:ring-[#0c3960]/10 transition duration-200 cursor-pointer group shadow-xs hover:shadow-md hover:-translate-y-1 block"
             >
-              <div className="space-y-3">
+              {/* Bagian Atas: Dark Navy Header */}
+              <div className="bg-[#1e293b] p-5 text-white space-y-2.5 group-hover:bg-[#0c3960] transition-colors">
                 <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
-                    {sch.badge}
-                  </span>
+                  <h3 className="text-base sm:text-lg font-bold text-white tracking-wide">
+                    {sess.code}
+                  </h3>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      sch.status === "Berlangsung"
-                        ? "bg-emerald-100 text-emerald-800 animate-pulse"
-                        : "bg-slate-100 text-slate-600"
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition ${
+                      isDone
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
+                        : "bg-white/10 text-white border-white/20"
                     }`}
                   >
-                    {sch.status}
+                    {isDone ? "Selesai" : "Belum Absen"}
                   </span>
                 </div>
 
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900">
-                    {sch.classCode}
-                  </h3>
-                  <div className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mt-0.5">
-                    <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{sch.subject}</span>
-                  </div>
-                </div>
+                <p className="text-xs text-slate-300 font-medium">
+                  {sess.subject}
+                </p>
 
-                <div className="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="font-semibold">{sch.time}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{sch.room}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{sch.totalStudents} Siswa Terdaftar</span>
-                  </div>
+                <div className="flex items-center gap-2 text-xs text-slate-300 pt-1">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{sess.jam}</span>
                 </div>
               </div>
 
-              <Link
-                href="/absensi"
-                className="w-full py-2.5 px-3 rounded-xl bg-[#0c3960] hover:bg-[#0a2e4e] text-white text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
-              >
-                <span>Input / Cek Presensi</span>
-                <ArrowRight className="w-4 h-4 text-amber-300" />
-              </Link>
-            </div>
-          ))}
-        </div>
+              {/* Bagian Bawah: Putih Bersih */}
+              <div className="bg-white p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-500">
+                    <Users className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{sess.students.length} Siswa Terdaftar</span>
+                  </div>
+                  <span
+                    className={`font-semibold ${
+                      isDone ? "text-emerald-600 font-bold" : "text-slate-400"
+                    }`}
+                  >
+                    {isDone ? "Tersimpan" : "Draft Siap"}
+                  </span>
+                </div>
+
+                <div className="border-t border-slate-100 pt-2.5 flex items-center justify-between text-xs font-bold text-slate-700 group-hover:text-emerald-700 transition">
+                  <span>Buka Tab Absensi</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition" />
+                </div>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
