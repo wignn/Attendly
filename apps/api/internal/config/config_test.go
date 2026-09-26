@@ -7,6 +7,7 @@ import (
 
 func TestConfigLoad(t *testing.T) {
 	t.Setenv("PORT", "9090")
+	t.Setenv("SUPER_ADMIN_EMAIL", "  ADMIN@school.example ")
 
 	cfg := Load()
 	if cfg.Port != "9090" {
@@ -14,6 +15,9 @@ func TestConfigLoad(t *testing.T) {
 	}
 	if cfg.AppName != "komas-api" {
 		t.Errorf("expected AppName=komas-api, got %s", cfg.AppName)
+	}
+	if cfg.SuperAdminEmail != "admin@school.example" {
+		t.Errorf("expected normalized SUPER_ADMIN_EMAIL, got %q", cfg.SuperAdminEmail)
 	}
 }
 

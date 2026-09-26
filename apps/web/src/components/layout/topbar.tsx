@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useAttendanceDate } from "@/context/attendance-date-context";
-import { useAuthRole, DEMO_PROFILES, UserRole } from "@/context/auth-role-context";
+import { useAuthRole } from "@/context/auth-role-context";
 import {
   Menu,
   ChevronLeft,
@@ -13,7 +13,6 @@ import {
   Users,
   ChevronDown,
   LogOut,
-  Sparkles,
 } from "lucide-react";
 
 interface TopbarProps {
@@ -35,8 +34,7 @@ export function Topbar({
     resetDateToToday,
   } = useAttendanceDate();
 
-  const { currentUser, activeRole, switchRole, logout } = useAuthRole();
-  const [roleDropdownOpen, setRoleDropdownOpen] = React.useState(false);
+  const { currentUser, activeRole, logout } = useAuthRole();
   const [profileDropdownOpen, setProfileDropdownOpen] = React.useState(false);
 
   // Close dropdown on outside click
@@ -44,7 +42,6 @@ export function Topbar({
   React.useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setRoleDropdownOpen(false);
         setProfileDropdownOpen(false);
       }
     }
@@ -138,76 +135,17 @@ export function Topbar({
           </button>
         </div>
 
-        {/* ROLE SWITCHER SELECTOR (Interactive Testing Pill) */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              setRoleDropdownOpen(!roleDropdownOpen);
-              setProfileDropdownOpen(false);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/60 text-slate-700 text-xs font-semibold transition cursor-pointer shadow-xs"
-            title="Ganti Peran / Role untuk Pengujian"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span className="hidden sm:inline">Role:</span>
-            <span className="font-bold text-[#0c3960]">
-              {activeRole === "SUPER_ADMIN"
-                ? "👑 Super Admin"
-                : currentUser.homeroomClass
-                ? `👨‍🏫 Guru & Wali ${currentUser.homeroomClass}`
-                : "👩‍🏫 Guru Mapel"}
-            </span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-          </button>
-
-          {/* Dropdown Menu for Switching Roles */}
-          {roleDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="px-3.5 py-1.5 border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Ganti Peran (Role Switcher)
-              </div>
-              {(["SUPER_ADMIN", "TEACHER", "HOMEROOM_TEACHER"] as UserRole[]).map(
-                (roleKey) => {
-                  const prof = DEMO_PROFILES[roleKey];
-                  const isCurrent = activeRole === roleKey;
-                  return (
-                    <button
-                      key={roleKey}
-                      onClick={() => {
-                        switchRole(roleKey);
-                        setRoleDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3.5 py-2.5 flex items-center justify-between text-xs transition cursor-pointer ${
-                        isCurrent
-                          ? "bg-amber-50 text-slate-900 font-bold border-l-4 border-amber-400"
-                          : "text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold text-slate-900">{prof.name}</div>
-                        <div className="text-[10px] text-slate-400">
-                          {prof.roleLabel} {prof.homeroomClass ? `• ${prof.homeroomClass}` : ""}
-                        </div>
-                      </div>
-                      {isCurrent && (
-                        <span className="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-1.5 py-0.5 rounded">
-                          Aktif
-                        </span>
-                      )}
-                    </button>
-                  );
-                }
-              )}
-            </div>
-          )}
+        {/* Current assigned role */}
+        <div className="px-3 py-1.5 rounded-xl border border-amber-200 bg-amber-50/50 text-xs font-bold text-[#0c3960]">
+          {activeRole === "SUPER_ADMIN" ? "Super Admin" : activeRole === "HOMEROOM_TEACHER" ? "Wali Kelas" : "Guru Mapel"}
         </div>
+
 
         {/* Profile Avatar & Details Header */}
         <div className="relative">
           <button
             onClick={() => {
               setProfileDropdownOpen(!profileDropdownOpen);
-              setRoleDropdownOpen(false);
             }}
             className="flex items-center gap-2 pl-2 border-l border-slate-200 hover:opacity-85 transition cursor-pointer"
           >

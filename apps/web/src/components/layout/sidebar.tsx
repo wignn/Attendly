@@ -32,61 +32,48 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const { currentUser, activeRole, logout } = useAuthRole();
 
-  // Navigation Items according to Active Role & Assignment
   const navSections = React.useMemo(() => {
-    if (activeRole === "TEACHER" || activeRole === "HOMEROOM_TEACHER") {
-      const sections = [
+    if (currentUser.roles.includes("SUPER_ADMIN")) {
+      return [
         {
-          heading: "TUGAS GURU MAPEL",
+          heading: "MENU UTAMA",
           items: [
-            { href: "/portal-guru", label: "Jadwal Mengajar", icon: CalendarCheck },
-            { href: "/absensi", label: "Presensi Mengajar", icon: ClipboardCheck },
-            { href: "/dashboard", label: "Statistik Kehadiran Mapel", icon: BarChart3 },
+            { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+            { href: "/guru", label: "Manajemen Guru", icon: GraduationCap },
+            { href: "/siswa", label: "Manajemen Siswa", icon: Users },
+            { href: "/kelas", label: "Manajemen Kelas", icon: Shapes },
+            { href: "/mapel", label: "Manajemen Mapel", icon: BookOpen },
+            { href: "/tahun-ajaran", label: "Tahun Ajaran", icon: CalendarDays },
+            { href: "/jadwal", label: "Jadwal Kelas", icon: Clock },
+            { href: "/absensi", label: "Manajemen Absensi", icon: ClipboardCheck },
+            { href: "/portal-guru", label: "Portal Guru Mapel & Wali", icon: School },
+            { href: "/audit", label: "Audit Log", icon: ShieldCheck },
           ],
         },
       ];
 
-      // Fitur Wali Kelas HANYA tampil jika guru ditugaskan sebagai Wali Kelas
-      if (currentUser.homeroomClass) {
-        sections.push({
-          heading: "TUGAS WALI KELAS",
-          items: [
-            {
-              href: "/siswa",
-              label: `Wali Kelas (${currentUser.homeroomClass})`,
-              icon: UsersRound,
-            },
-            {
-              href: "/audit",
-              label: "Riwayat Sesi Selesai",
-              icon: History,
-            },
-          ],
-        });
-      }
-
-      return sections;
-    }
-
-    // Default: SUPER_ADMIN
-    return [
-      {
-        heading: "MENU UTAMA",
+    const sections = [];
+    if (currentUser.roles.includes("TEACHER")) {
+      sections.push({
+        heading: "TUGAS GURU MAPEL",
         items: [
-          { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-          { href: "/guru", label: "Manajemen Guru", icon: GraduationCap },
-          { href: "/siswa", label: "Manajemen Siswa", icon: Users },
-          { href: "/kelas", label: "Manajemen Kelas", icon: Shapes },
-          { href: "/mapel", label: "Manajemen Mapel", icon: BookOpen },
-          { href: "/tahun-ajaran", label: "Tahun Ajaran", icon: CalendarDays },
-          { href: "/jadwal", label: "Jadwal Kelas", icon: Clock },
-          { href: "/absensi", label: "Manajemen Absensi", icon: ClipboardCheck },
-          { href: "/portal-guru", label: "Portal Guru Mapel & Wali", icon: School },
-          { href: "/audit", label: "Audit Log", icon: ShieldCheck },
+          { href: "/portal-guru", label: "Jadwal Mengajar", icon: CalendarCheck },
+          { href: "/absensi", label: "Presensi Mengajar", icon: ClipboardCheck },
+          { href: "/dashboard", label: "Statistik Kehadiran", icon: BarChart3 },
         ],
-      },
-    ];
-  }, [activeRole]);
+      });
+    }
+    if (currentUser.roles.includes("HOMEROOM_TEACHER")) {
+      sections.push({
+        heading: "TUGAS WALI KELAS",
+        items: [
+          { href: "/dashboard", label: "Rekap Kehadiran", icon: BarChart3 },
+          { href: "/absensi", label: "Laporan Absensi Rombel", icon: ClipboardCheck },
+        ],
+      });
+    }
+    return sections;
+  }, [currentUser.roles]);
 
   return (
     <>

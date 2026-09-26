@@ -108,4 +108,5 @@ type AttendanceSessionRepository interface {
 	Submit(ctx context.Context, sessionID uuid.UUID, expectedVersion int, actorID uuid.UUID) (*AttendanceSessionDetail, error)
 	Reopen(ctx context.Context, sessionID uuid.UUID, actorID uuid.UUID, reason string) (*AttendanceSessionDetail, error)
 	GetScheduleByID(ctx context.Context, scheduleID uuid.UUID) (*Schedule, error)
+	CanTeachClassSubject(ctx context.Context, teacherID, classID, subjectID uuid.UUID) (bool, error)
 }

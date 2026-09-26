@@ -12,7 +12,7 @@ export function useAuth() {
 
   const userQuery = useQuery({
     queryKey: ["user", "me"],
-    queryFn: () => fetchApi<UserProfileDto>("/api/v1/users/me"),
+    queryFn: () => fetchApi<UserProfileDto>("/api/v1/me"),
     retry: false,
     enabled: typeof window !== "undefined" && !!localStorage.getItem("token"),
   });
@@ -24,8 +24,13 @@ export function useAuth() {
         body: JSON.stringify(payload),
       }),
     onSuccess: (data) => {
-      localStorage.setItem("token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("token", data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem("refresh_token", data.refresh_token);
+        }
+        localStorage.setItem("attendly_is_auth", "true");
+      }
       queryClient.setQueryData(["user", "me"], data.user);
     },
   });
@@ -37,15 +42,30 @@ export function useAuth() {
         body: JSON.stringify(payload),
       }),
     onSuccess: (data) => {
-      localStorage.setItem("token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("token", data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem("refresh_token", data.refresh_token);
+        }
+        localStorage.setItem("attendly_is_auth", "true");
+      }
       queryClient.setQueryData(["user", "me"], data.user);
     },
   });
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("refresh_token");
+    if (typeof window !== "undefined") {
+      const refreshToken = localStorage.getItem("refresh_token");
+      if (refreshToken) {
+        fetchApi("/api/v1/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        }).catch(() => {});
+      }
+      localStorage.removeItem("token");
+      localStorage.removeItem("refresh_token");
+      localStorage.setItem("attendly_is_auth", "false");
+    }
     queryClient.clear();
   };
 
