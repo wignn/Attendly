@@ -79,7 +79,10 @@ func TestStudentHandlerCRUDHistoryAndTransferEnvelopes(t *testing.T) {
 			if f.Page != 2 || f.PerPage != 10 || f.Search != "mia" || f.SortBy != "nis" || f.SortOrder != "desc" {
 				t.Errorf("unexpected filter: %+v", f)
 			}
-			return []domain.StudentRecord{rec}, 11, nil
+			inactive := rec
+			inactive.ID = uuid.New()
+			inactive.Active = false
+			return []domain.StudentRecord{rec, inactive}, 11, nil
 		},
 		get: func(context.Context, *domain.User, uuid.UUID) (domain.StudentRecord, error) { return rec, nil },
 		create: func(_ context.Context, _ *domain.User, i service.StudentCreateInput) (domain.StudentRecord, error) {
@@ -110,6 +113,9 @@ func TestStudentHandlerCRUDHistoryAndTransferEnvelopes(t *testing.T) {
 			t.Errorf("list response missing %s: %s", s, list.Body.String())
 		}
 	}
+	if body := list.Body.String(); !strings.Contains(body, `"status":"ACTIVE"`) || !strings.Contains(body, `"status":"INACTIVE"`) || strings.Contains(body, `"active":`) {
+		t.Errorf("list must expose enum status without contradictory active boolean: %s", body)
+	}
 	for _, tc := range []struct {
 		name, method, path, body string
 		handler                  http.HandlerFunc
@@ -127,6 +133,11 @@ func TestStudentHandlerCRUDHistoryAndTransferEnvelopes(t *testing.T) {
 			r := assertStudentStatus(t, tc.handler, tc.method, tc.path, tc.body, tc.status)
 			if !strings.Contains(r.Body.String(), `"success":true`) || !strings.Contains(r.Body.String(), `"message":"`+tc.message+`"`) {
 				t.Errorf("unexpected success envelope: %s", r.Body.String())
+			}
+			if tc.name == "detail" || tc.name == "create" || tc.name == "update" || tc.name == "transfer" {
+				if body := r.Body.String(); !strings.Contains(body, `"status":"ACTIVE"`) || strings.Contains(body, `"active":`) {
+					t.Errorf("record response must expose enum status without active boolean: %s", body)
+				}
 			}
 		})
 	}

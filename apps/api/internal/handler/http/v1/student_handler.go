@@ -31,6 +31,39 @@ type StudentHandler struct{ service StudentService }
 
 func NewStudentHandler(svc StudentService) *StudentHandler { return &StudentHandler{service: svc} }
 
+type studentResponse struct {
+	ID               uuid.UUID  `json:"id"`
+	NIS              string     `json:"nis"`
+	NISN             *string    `json:"nisn,omitempty"`
+	FullName         string     `json:"full_name"`
+	CurrentClassID   uuid.UUID  `json:"class_id"`
+	CurrentClassName string     `json:"current_class_name"`
+	Status           string     `json:"status"`
+	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func projectStudent(record domain.StudentRecord) studentResponse {
+	status := "INACTIVE"
+	if record.Active {
+		status = "ACTIVE"
+	}
+	return studentResponse{
+		ID: record.ID, NIS: record.NIS, NISN: record.NISN, FullName: record.FullName,
+		CurrentClassID: record.CurrentClassID, CurrentClassName: record.CurrentClassName,
+		Status: status, DeletedAt: record.DeletedAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+	}
+}
+
+func projectStudents(records []domain.StudentRecord) []studentResponse {
+	projected := make([]studentResponse, len(records))
+	for i, record := range records {
+		projected[i] = projectStudent(record)
+	}
+	return projected
+}
+
 type studentCreateRequest struct {
 	NIS         string  `json:"nis"`
 	NISN        *string `json:"nisn"`
@@ -96,7 +129,7 @@ func (h *StudentHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeStudentError(w, err)
 		return
 	}
-	response.Paginated(w, http.StatusOK, "Students retrieved", items, int(filter.Page), int(filter.PerPage), total)
+	response.Paginated(w, http.StatusOK, "Students retrieved", projectStudents(items), int(filter.Page), int(filter.PerPage), total)
 }
 func (h *StudentHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := studentPathID(w, r)
@@ -108,7 +141,7 @@ func (h *StudentHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeStudentError(w, err)
 		return
 	}
-	response.Success(w, http.StatusOK, "Student retrieved", data)
+	response.Success(w, http.StatusOK, "Student retrieved", projectStudent(data))
 }
 func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req studentCreateRequest
@@ -134,7 +167,7 @@ func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeStudentError(w, err)
 		return
 	}
-	response.Success(w, http.StatusCreated, "Student created", data)
+	response.Success(w, http.StatusCreated, "Student created", projectStudent(data))
 }
 func (h *StudentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := studentPathID(w, r)
@@ -150,7 +183,7 @@ func (h *StudentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeStudentError(w, err)
 		return
 	}
-	response.Success(w, http.StatusOK, "Student updated", data)
+	response.Success(w, http.StatusOK, "Student updated", projectStudent(data))
 }
 func (h *StudentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := studentPathID(w, r)
@@ -203,7 +236,7 @@ func (h *StudentHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		writeStudentError(w, err)
 		return
 	}
-	response.Success(w, http.StatusCreated, "Student enrollment transferred", data)
+	response.Success(w, http.StatusCreated, "Student enrollment transferred", projectStudent(data))
 }
 func studentPathID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, "student_id"))

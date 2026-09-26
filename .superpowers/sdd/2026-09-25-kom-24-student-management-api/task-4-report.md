@@ -33,3 +33,13 @@ Follow-up verification from `apps/api`:
 - `go test ./internal/handler/http/v1 -run 'TestStudent|TestRegisterRoutes' -count=1` — PASS.
 - `go test ./internal/handler/http/v1 -count=1` — PASS.
 - `git diff --check` — PASS (line-ending conversion notices only).
+
+## Student status representation follow-up
+
+Aligned record responses with the approved design by projecting `StudentRecord` into a response shape with `status: "ACTIVE" | "INACTIVE"`; the internal `active` boolean is no longer serialized, avoiding conflicting representations. Applied the projection to list, detail, create, update, and transfer responses. DELETE continues to return only `{id}`.
+
+Follow-up verification from `apps/api`:
+
+- `go test ./internal/handler/http/v1 -run 'TestStudentHandlerCRUDHistoryAndTransferEnvelopes|TestRegisterRoutesUsesCanonicalStudentPaths' -count=1` — PASS.
+- `go test ./internal/handler/http/v1 -count=1` — PASS.
+- Tests assert ACTIVE and INACTIVE in list data, ACTIVE in record responses, and absence of the `active` field.
