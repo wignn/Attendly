@@ -156,24 +156,6 @@ func TestInactiveAccountCannotLoginOrRefresh(t *testing.T) {
 	}
 }
 
-func TestRegisterAlwaysAssignsTeacherRole(t *testing.T) {
-	for _, requestedRole := range []domain.Role{domain.RoleSuperAdmin, domain.RoleHomeroomTeacher, domain.RoleTeacher} {
-		t.Run(string(requestedRole), func(t *testing.T) {
-			repo := &authUserRepo{}
-			cfg := &config.Config{JWTAccessTTL: time.Minute, JWTRefreshTTL: time.Hour}
-			svc := NewAuthService(repo, token.NewMaker("secret-32-character-key-for-test-12345"), cfg)
-
-			result, err := svc.Register(context.Background(), "Teacher", "teacher@example.com", "strongpassword123", requestedRole)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if result.User.Role != domain.RoleTeacher {
-				t.Fatalf("public registration assigned %s when caller requested %s", result.User.Role, requestedRole)
-			}
-		})
-	}
-}
-
 func TestGoogleLoginRejectsWhenClientIDIsMissing(t *testing.T) {
 	repo := &authUserRepo{}
 	svc := NewAuthService(repo, token.NewMaker("secret-32-character-key-for-test-12345"), &config.Config{}, &refreshSessionMemory{active: make(map[string]domain.RefreshSession)})
@@ -185,7 +167,7 @@ func TestGoogleLoginRejectsWhenClientIDIsMissing(t *testing.T) {
 	}
 }
 
-func TestGoogleLoginRejectsInvalidClaimsAndUnknownEmail(t *testing.T) {
+func TestGoogleLoginRejectsInvalidClaimsAndUnprovisionedEmail(t *testing.T) {
 	tests := []struct {
 		name          string
 		audience      string
@@ -207,7 +189,7 @@ func TestGoogleLoginRejectsInvalidClaimsAndUnknownEmail(t *testing.T) {
 	}
 }
 
-func TestGoogleLoginAcceptsRegisteredVerifiedUser(t *testing.T) {
+func TestGoogleLoginAcceptsProvisionedVerifiedUser(t *testing.T) {
 	user := &domain.User{ID: uuid.New(), Email: "teacher@example.com", Name: "Teacher", Role: domain.RoleTeacher, IsActive: true}
 	svc, key := googleTestService(t, user)
 	idToken := googleTestToken(t, key, "test-key", "attendly-client", true)

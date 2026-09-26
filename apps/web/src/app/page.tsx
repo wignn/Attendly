@@ -20,9 +20,6 @@ export default function HomePage() {
           <Link href="/login">
             <Button size="lg">Sign In</Button>
           </Link>
-          <Link href="/register">
-            <Button size="lg" variant="outline">Create Account</Button>
-          </Link>
         </div>
       </div>
 

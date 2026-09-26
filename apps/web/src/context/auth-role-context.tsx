@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { fetchApi } from "@/lib/api-client";
 
 export type UserRole = "SUPER_ADMIN" | "TEACHER" | "HOMEROOM_TEACHER";
 
@@ -9,57 +10,43 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
-  nip: string;
-  roleLabel: string;
+  roles: UserRole[];
+  permissions?: string[];
+  nip?: string;
+  roleLabel?: string;
   subject?: string;
   homeroomClass?: string;
   avatar?: string;
 }
 
-export const DEMO_PROFILES: Record<UserRole, AuthUser> = {
-  SUPER_ADMIN: {
-    id: "usr-admin-1",
-    name: "Admin Utama",
-    email: "admin@smpn1tirtajaya.sch.id",
-    role: "SUPER_ADMIN",
-    nip: "197905102005011003",
-    roleLabel: "Super Admin",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80",
-  },
-  TEACHER: {
-    id: "usr-guru-1",
-    name: "Siti Rahmawati, S.Pd.",
-    email: "siti.rahmawati@smpn1tirtajaya.sch.id",
-    role: "TEACHER",
-    nip: "198503152010012015",
-    roleLabel: "Guru Mata Pelajaran",
-    subject: "Bahasa Indonesia",
-    homeroomClass: "7B",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&h=120&q=80",
-  },
-  HOMEROOM_TEACHER: {
-    id: "usr-wali-1",
-    name: "Budi Santoso, M.Pd.",
-    email: "budi.santoso@smpn1tirtajaya.sch.id",
-    role: "HOMEROOM_TEACHER",
-    nip: "198207122008011009",
-    roleLabel: "Guru & Wali Kelas",
-    subject: "Matematika",
-    homeroomClass: "7A",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80",
-  },
-};
+interface AuthTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    roles: UserRole[];
+    permissions?: string[];
+  };
+}
 
 interface AuthRoleContextType {
   currentUser: AuthUser;
-  activeRole: UserRole;
+  activeRole: UserRole | null;
   isAuthenticated: boolean;
-  switchRole: (role: UserRole) => void;
-  loginAsDemo: (role: UserRole) => void;
-  login: (email: string, password?: string) => Promise<boolean>;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  loginWithGoogle: (idToken: string) => Promise<boolean>;
   logout: () => void;
 }
+
+const EMPTY_USER: AuthUser = {
+  id: "",
+  name: "",
+  email: "",
+  roles: [],
+};
 
 const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(
   undefined
@@ -67,89 +54,93 @@ const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(
 
 export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [activeRole, setActiveRole] = React.useState<UserRole>("SUPER_ADMIN");
-  const [currentUser, setCurrentUser] = React.useState<AuthUser>(
-    DEMO_PROFILES.SUPER_ADMIN
-  );
-  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean>(true);
-  const [isMounted, setIsMounted] = React.useState(false);
+  const [currentUser, setCurrentUser] = React.useState<AuthUser>(EMPTY_USER);
+  const [activeRole, setActiveRole] = React.useState<UserRole | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  // Load persisted session from localStorage
+  const applySession = React.useCallback((session: AuthTokenResponse) => {
+    localStorage.setItem("token", session.access_token);
+    localStorage.setItem("refresh_token", session.refresh_token);
+    const user = { ...session.user, roles: session.user.roles || [] };
+    setCurrentUser(user);
+    setActiveRole(user.roles.includes("SUPER_ADMIN") ? "SUPER_ADMIN" : user.roles[0] ?? null);
+  }, []);
+
   React.useEffect(() => {
-    setIsMounted(true);
-    try {
-      const savedRole = localStorage.getItem("attendly_active_role") as UserRole;
-      const savedAuth = localStorage.getItem("attendly_is_auth");
-
-      if (savedRole && DEMO_PROFILES[savedRole]) {
-        setActiveRole(savedRole);
-        setCurrentUser(DEMO_PROFILES[savedRole]);
-      }
-      if (savedAuth === "false") {
-        setIsAuthenticated(false);
-      } else {
-        setIsAuthenticated(true);
-      }
-    } catch {
-      // Fallback to default SUPER_ADMIN
+    let cancelled = false;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsLoading(false);
+      return;
     }
+
+    fetchApi<AuthUser>("/api/v1/users/me")
+      .then((user) => {
+        if (!cancelled) {
+          const roles = user.roles || [];
+          setCurrentUser({ ...user, roles });
+          setActiveRole(roles.includes("SUPER_ADMIN") ? "SUPER_ADMIN" : roles[0] ?? null);
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        if (!cancelled) {
+          setCurrentUser(EMPTY_USER);
+          setActiveRole(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const switchRole = React.useCallback((role: UserRole) => {
-    const profile = DEMO_PROFILES[role];
-    if (profile) {
-      setActiveRole(role);
-      setCurrentUser(profile);
-      setIsAuthenticated(true);
-      try {
-        localStorage.setItem("attendly_active_role", role);
-        localStorage.setItem("attendly_is_auth", "true");
-      } catch {}
-    }
-  }, []);
-
-  const loginAsDemo = React.useCallback(
-    (role: UserRole) => {
-      switchRole(role);
-      router.push("/dashboard");
-    },
-    [switchRole, router]
-  );
-
-  const login = React.useCallback(
-    async (email: string, _password?: string): Promise<boolean> => {
-      // Check if email matches any demo profile
-      const foundRole = (Object.keys(DEMO_PROFILES) as UserRole[]).find(
-        (r) => DEMO_PROFILES[r].email.toLowerCase() === email.toLowerCase()
-      );
-
-      const targetRole = foundRole || "SUPER_ADMIN";
-      switchRole(targetRole);
+  const authenticate = React.useCallback(
+    async (endpoint: string, payload: Record<string, string>) => {
+      const session = await fetchApi<AuthTokenResponse>(endpoint, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      applySession(session);
       router.push("/dashboard");
       return true;
     },
-    [switchRole, router]
+    [applySession, router]
+  );
+
+  const login = React.useCallback(
+    (email: string, password: string) =>
+      authenticate("/api/v1/auth/login", { email, password }),
+    [authenticate]
+  );
+
+  const loginWithGoogle = React.useCallback(
+    (idToken: string) =>
+      authenticate("/api/v1/auth/google", { id_token: idToken }),
+    [authenticate]
   );
 
   const logout = React.useCallback(() => {
-    setIsAuthenticated(false);
-    try {
-      localStorage.setItem("attendly_is_auth", "false");
-      localStorage.removeItem("token");
-      localStorage.removeItem("refresh_token");
-    } catch {}
+    localStorage.removeItem("token");
+    localStorage.removeItem("refresh_token");
+    setCurrentUser(EMPTY_USER);
+    setActiveRole(null);
     router.push("/login");
   }, [router]);
 
   return (
     <AuthRoleContext.Provider
       value={{
-        currentUser: isMounted ? currentUser : DEMO_PROFILES.SUPER_ADMIN,
-        activeRole: isMounted ? activeRole : "SUPER_ADMIN",
-        isAuthenticated: isMounted ? isAuthenticated : true,
-        switchRole,
-        loginAsDemo,
+        currentUser,
+        activeRole,
+        isAuthenticated: !!currentUser.id,
+        isLoading,
         login,
+        loginWithGoogle,
         logout,
       }}
     >

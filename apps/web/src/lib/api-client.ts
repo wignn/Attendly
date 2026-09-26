@@ -1,6 +1,8 @@
 import { ApiResponse } from "@komas/shared-types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080")
+  .replace(/\/+$/, "")
+  .replace(/\/api\/v1$/, "");
 
 export class ApiError extends Error {
   constructor(
