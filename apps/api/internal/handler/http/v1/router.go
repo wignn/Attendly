@@ -21,6 +21,8 @@ type Handlers struct {
 	Subject           *SubjectHandler
 	AcademicYear      *AcademicYearHandler
 	Teacher           *TeacherHandler
+	Class             *ClassHandler
+	ExportAudit       *ExportAuditHandler
 }
 
 func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client, userRepository domain.UserRepository) {
@@ -47,6 +49,16 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.Get("/teachers/{teacher_id}", h.Teacher.Get)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/teachers/{teacher_id}", h.Teacher.Update)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/teachers/{teacher_id}", h.Teacher.Delete)
+			}
+			if h.Class != nil {
+				r.Get("/classes", h.Class.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/classes", h.Class.Create)
+				r.Get("/classes/{class_id}", h.Class.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/classes/{class_id}", h.Class.Update)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/classes/{class_id}", h.Class.Delete)
+				r.Get("/classes/{class_id}/students", h.Class.ListStudents)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/classes/{class_id}/students", h.Class.AddStudent)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/classes/{class_id}/students/{student_id}", h.Class.RemoveStudent)
 			}
 			if h.Assignments != nil {
 				r.Get("/teaching-assignments", h.Assignments.List)
@@ -95,6 +107,12 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.Put("/attendance-sessions/{id}/records", h.AttendanceSession.UpdateRecords)
 				r.Post("/attendance-sessions/{id}/submit", h.AttendanceSession.Submit)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/attendance-sessions/{id}/reopen", h.AttendanceSession.Reopen)
+			}
+			if h.ExportAudit != nil {
+				r.Post("/exports/attendance", h.ExportAudit.CreateExport)
+				r.Get("/exports/{job_id}", h.ExportAudit.GetExportJob)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/audit-logs", h.ExportAudit.ListAuditLogs)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/audit-logs/{audit_log_id}", h.ExportAudit.GetAuditLog)
 			}
 			if h.Attendance != nil {
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/dashboard", h.Attendance.AdminDashboard)
