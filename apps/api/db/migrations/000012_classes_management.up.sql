@@ -12,6 +12,7 @@ WHERE code IS NULL;
 
 ALTER TABLE classes ALTER COLUMN code SET NOT NULL;
 
+ALTER TABLE classes DROP CONSTRAINT IF EXISTS classes_name_key;
 DROP INDEX IF EXISTS classes_name_key;
 
 CREATE UNIQUE INDEX idx_classes_code_unique ON classes (code) WHERE deleted_at IS NULL;

@@ -9,8 +9,13 @@ ALTER TABLE attendance_sessions
     ADD COLUMN reopen_reason TEXT,
     ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+CREATE OR REPLACE FUNCTION attendance_session_date(held_at TIMESTAMPTZ)
+RETURNS DATE AS $$
+    SELECT (held_at AT TIME ZONE 'Asia/Jakarta')::date;
+$$ LANGUAGE sql IMMUTABLE;
+
 CREATE UNIQUE INDEX idx_attendance_sessions_schedule_date
-    ON attendance_sessions (schedule_id, (held_at::date))
+    ON attendance_sessions (schedule_id, attendance_session_date(held_at))
     WHERE schedule_id IS NOT NULL;
 
 CREATE INDEX idx_attendance_sessions_status ON attendance_sessions(status);

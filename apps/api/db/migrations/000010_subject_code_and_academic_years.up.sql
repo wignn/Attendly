@@ -10,6 +10,7 @@ WHERE code IS NULL;
 ALTER TABLE subjects
     ALTER COLUMN code SET NOT NULL;
 
+ALTER TABLE subjects DROP CONSTRAINT IF EXISTS subjects_name_key;
 DROP INDEX IF EXISTS subjects_name_key;
 
 CREATE UNIQUE INDEX idx_subjects_code_unique ON subjects (code) WHERE deleted_at IS NULL;

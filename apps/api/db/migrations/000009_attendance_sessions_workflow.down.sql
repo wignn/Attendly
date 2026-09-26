@@ -6,6 +6,7 @@ DROP INDEX IF EXISTS idx_attendance_sessions_schedule_id;
 DROP INDEX IF EXISTS idx_attendance_sessions_held_at;
 DROP INDEX IF EXISTS idx_attendance_sessions_status;
 DROP INDEX IF EXISTS idx_attendance_sessions_schedule_date;
+DROP FUNCTION IF EXISTS attendance_session_date(TIMESTAMPTZ);
 
 ALTER TABLE attendance_sessions
     DROP COLUMN IF EXISTS schedule_id,
