@@ -4,23 +4,25 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	Port           string
-	Env            string
-	AppName        string
-	DatabaseURL    string
-	RedisURL       string
-	RedisAddr      string
-	RedisPass      string
-	JWTSecret      string
-	JWTAccessTTL   time.Duration
-	JWTRefreshTTL  time.Duration
-	GoogleClientID string
+	Port            string
+	Env             string
+	AppName         string
+	DatabaseURL     string
+	RedisURL        string
+	RedisAddr       string
+	RedisPass       string
+	JWTSecret       string
+	SuperAdminEmail string
+	JWTAccessTTL    time.Duration
+	JWTRefreshTTL   time.Duration
+	GoogleClientID  string
 }
 
 func Load() *Config {
@@ -49,17 +51,18 @@ func Load() *Config {
 	refreshTTLDays, _ := strconv.Atoi(getEnv("JWT_REFRESH_TTL_DAYS", "7"))
 
 	return &Config{
-		Port:           port,
-		Env:            env,
-		AppName:        appName,
-		DatabaseURL:    dbURL,
-		RedisURL:       redisURL,
-		RedisAddr:      redisHost + ":" + redisPort,
-		RedisPass:      redisPass,
-		JWTSecret:      jwtSecret,
-		JWTAccessTTL:   time.Duration(accessTTLMinutes) * time.Minute,
-		JWTRefreshTTL:  time.Duration(refreshTTLDays) * 24 * time.Hour,
-		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
+		Port:            port,
+		Env:             env,
+		AppName:         appName,
+		DatabaseURL:     dbURL,
+		RedisURL:        redisURL,
+		RedisAddr:       redisHost + ":" + redisPort,
+		RedisPass:       redisPass,
+		JWTSecret:       jwtSecret,
+		SuperAdminEmail: strings.ToLower(strings.TrimSpace(getEnv("SUPER_ADMIN_EMAIL", ""))),
+		JWTAccessTTL:    time.Duration(accessTTLMinutes) * time.Minute,
+		JWTRefreshTTL:   time.Duration(refreshTTLDays) * 24 * time.Hour,
+		GoogleClientID:  getEnv("GOOGLE_CLIENT_ID", ""),
 	}
 }
 

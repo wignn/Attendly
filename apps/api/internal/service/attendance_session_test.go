@@ -21,6 +21,15 @@ func newMockAttendanceSessionRepo() *mockAttendanceSessionRepo {
 	}
 }
 
+func (m *mockAttendanceSessionRepo) CanTeachClassSubject(_ context.Context, teacherID, classID, subjectID uuid.UUID) (bool, error) {
+	for _, schedule := range m.schedules {
+		if schedule.TeacherID == teacherID && schedule.ClassID == classID && schedule.SubjectID == subjectID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (m *mockAttendanceSessionRepo) GetScheduleByID(_ context.Context, id uuid.UUID) (*domain.Schedule, error) {
 	s, ok := m.schedules[id]
 	if !ok {
@@ -157,6 +166,25 @@ func (m *mockAttendanceSessionRepo) Reopen(_ context.Context, sessionID uuid.UUI
 	sess.Version++
 	sess.UpdatedAt = now
 	return sess, nil
+}
+
+func TestManualAttendanceSessionRequiresClassSubjectAssignment(t *testing.T) {
+	ctx := context.Background()
+	repo := newMockAttendanceSessionRepo()
+	svc := NewAttendanceSessionService(repo)
+	teacher := &domain.User{ID: uuid.New(), IsActive: true, Roles: []domain.Role{domain.RoleTeacher}}
+	classID, subjectID := uuid.New(), uuid.New()
+	input := domain.CreateAttendanceSessionInput{ClassID: &classID, SubjectID: &subjectID, Date: "2026-09-26"}
+
+	if _, _, err := svc.CreateOrGet(ctx, teacher, input); err != domain.ErrForbidden {
+		t.Fatalf("expected unassigned teacher to be forbidden, got %v", err)
+	}
+
+	scheduleID := uuid.New()
+	repo.schedules[scheduleID] = &domain.Schedule{ID: scheduleID, TeacherID: teacher.ID, ClassID: classID, SubjectID: subjectID}
+	if _, _, err := svc.CreateOrGet(ctx, teacher, input); err != nil {
+		t.Fatalf("expected assigned teacher to create a manual session, got %v", err)
+	}
 }
 
 func TestAttendanceSessionWorkflow(t *testing.T) {

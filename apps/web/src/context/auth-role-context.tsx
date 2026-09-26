@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { fetchApi } from "@/lib/api-client";
+import { AuthTokenResponseDto } from "@komas/shared-types";
 
 export type UserRole = "SUPER_ADMIN" | "TEACHER" | "HOMEROOM_TEACHER";
 
@@ -10,6 +12,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
+  roles: string[];
   nip: string;
   roleLabel: string;
   subject?: string;
@@ -17,142 +20,151 @@ export interface AuthUser {
   avatar?: string;
 }
 
-export const DEMO_PROFILES: Record<UserRole, AuthUser> = {
-  SUPER_ADMIN: {
-    id: "usr-admin-1",
-    name: "Admin Utama",
-    email: "admin@smpn1tirtajaya.sch.id",
-    role: "SUPER_ADMIN",
-    nip: "197905102005011003",
-    roleLabel: "Super Admin",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80",
-  },
-  TEACHER: {
-    id: "usr-guru-1",
-    name: "Siti Rahmawati, S.Pd.",
-    email: "siti.rahmawati@smpn1tirtajaya.sch.id",
-    role: "TEACHER",
-    nip: "198503152010012015",
-    roleLabel: "Guru Mata Pelajaran",
-    subject: "Bahasa Indonesia",
-    homeroomClass: "7B",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&h=120&q=80",
-  },
-  HOMEROOM_TEACHER: {
-    id: "usr-wali-1",
-    name: "Budi Santoso, M.Pd.",
-    email: "budi.santoso@smpn1tirtajaya.sch.id",
-    role: "HOMEROOM_TEACHER",
-    nip: "198207122008011009",
-    roleLabel: "Guru & Wali Kelas",
-    subject: "Matematika",
-    homeroomClass: "7A",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80",
-  },
+const EMPTY_USER: AuthUser = {
+  id: "",
+  name: "",
+  email: "",
+  role: "TEACHER",
+  roles: [],
+  nip: "",
+  roleLabel: "",
 };
+
+function determinePrimaryRole(roles?: string[]): UserRole {
+  if (roles?.includes("SUPER_ADMIN")) return "SUPER_ADMIN";
+  if (roles?.includes("HOMEROOM_TEACHER")) return "HOMEROOM_TEACHER";
+  return "TEACHER";
+}
+
+function getRoleLabel(role: UserRole): string {
+  switch (role) {
+    case "SUPER_ADMIN":
+      return "Super Admin";
+    case "HOMEROOM_TEACHER":
+      return "Guru & Wali Kelas";
+    default:
+      return "Guru Mata Pelajaran";
+  }
+}
 
 interface AuthRoleContextType {
   currentUser: AuthUser;
   activeRole: UserRole;
   isAuthenticated: boolean;
-  switchRole: (role: UserRole) => void;
-  loginAsDemo: (role: UserRole) => void;
+  isLoading: boolean;
   login: (email: string, password?: string) => Promise<boolean>;
-  logout: () => void;
+  loginWithGoogle: (idToken: string) => Promise<boolean>;
+  logout: () => Promise<void>;
 }
 
-const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(
-  undefined
-);
+const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(undefined);
 
 export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [activeRole, setActiveRole] = React.useState<UserRole>("SUPER_ADMIN");
-  const [currentUser, setCurrentUser] = React.useState<AuthUser>(
-    DEMO_PROFILES.SUPER_ADMIN
-  );
-  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean>(true);
-  const [isMounted, setIsMounted] = React.useState(false);
+  const [currentUser, setCurrentUser] = React.useState<AuthUser>(EMPTY_USER);
+  const [activeRole, setActiveRole] = React.useState<UserRole>("TEACHER");
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  // Load persisted session from localStorage
-  React.useEffect(() => {
-    setIsMounted(true);
+  const acceptSession = React.useCallback((userData: AuthTokenResponseDto["user"]) => {
+    const role = determinePrimaryRole(userData.roles);
+    const user: AuthUser = {
+      id: userData.id,
+      name: userData.name,
+      email: userData.email,
+      role,
+      roles: userData.roles ?? [],
+      nip: "",
+      roleLabel: getRoleLabel(role),
+    };
+    setCurrentUser(user);
+    setActiveRole(role);
+    setIsAuthenticated(true);
     try {
-      const savedRole = localStorage.getItem("attendly_active_role") as UserRole;
-      const savedAuth = localStorage.getItem("attendly_is_auth");
-
-      if (savedRole && DEMO_PROFILES[savedRole]) {
-        setActiveRole(savedRole);
-        setCurrentUser(DEMO_PROFILES[savedRole]);
-      }
-      if (savedAuth === "false") {
-        setIsAuthenticated(false);
-      } else {
-        setIsAuthenticated(true);
-      }
+      localStorage.setItem("attendly_active_role", role);
+      localStorage.setItem("attendly_is_auth", "true");
+      localStorage.setItem("attendly_user", JSON.stringify(user));
     } catch {
-      // Fallback to default SUPER_ADMIN
+      // Session remains active in memory when browser storage is unavailable.
     }
   }, []);
 
-  const switchRole = React.useCallback((role: UserRole) => {
-    const profile = DEMO_PROFILES[role];
-    if (profile) {
-      setActiveRole(role);
-      setCurrentUser(profile);
-      setIsAuthenticated(true);
+  React.useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    fetchApi<AuthTokenResponseDto["user"]>("/api/v1/me")
+      .then((user) => acceptSession(user))
+      .catch(() => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("attendly_user");
+        localStorage.removeItem("attendly_active_role");
+        localStorage.setItem("attendly_is_auth", "false");
+        setIsAuthenticated(false);
+        setCurrentUser(EMPTY_USER);
+      })
+      .finally(() => setIsLoading(false));
+  }, [acceptSession]);
+
+  const finishLogin = React.useCallback((user: AuthRoleContextType["currentUser"]) => {
+    if (user.role === "SUPER_ADMIN") router.push("/dashboard");
+    else router.push("/portal-guru");
+  }, [router]);
+
+  const login = React.useCallback(async (email: string, password?: string): Promise<boolean> => {
+    const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    localStorage.setItem("token", res.access_token);
+    if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
+    acceptSession(res.user);
+    finishLogin({ ...EMPTY_USER, ...res.user, role: determinePrimaryRole(res.user.roles), roles: res.user.roles ?? [], roleLabel: getRoleLabel(determinePrimaryRole(res.user.roles)) });
+    return true;
+  }, [acceptSession, finishLogin]);
+
+  const loginWithGoogle = React.useCallback(async (idToken: string): Promise<boolean> => {
+    const res = await fetchApi<AuthTokenResponseDto>("/api/v1/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ id_token: idToken }),
+    });
+    localStorage.setItem("token", res.access_token);
+    if (res.refresh_token) localStorage.setItem("refresh_token", res.refresh_token);
+    acceptSession(res.user);
+    const role = determinePrimaryRole(res.user.roles);
+    finishLogin({ ...EMPTY_USER, ...res.user, role, roles: res.user.roles ?? [], roleLabel: getRoleLabel(role) });
+    return true;
+  }, [acceptSession, finishLogin]);
+
+  const logout = React.useCallback(async () => {
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (refreshToken) {
       try {
-        localStorage.setItem("attendly_active_role", role);
-        localStorage.setItem("attendly_is_auth", "true");
-      } catch {}
+        await fetchApi("/api/v1/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      } catch {
+        // Clear the local session even when the API is unreachable.
+      }
     }
-  }, []);
-
-  const loginAsDemo = React.useCallback(
-    (role: UserRole) => {
-      switchRole(role);
-      router.push("/dashboard");
-    },
-    [switchRole, router]
-  );
-
-  const login = React.useCallback(
-    async (email: string, _password?: string): Promise<boolean> => {
-      // Check if email matches any demo profile
-      const foundRole = (Object.keys(DEMO_PROFILES) as UserRole[]).find(
-        (r) => DEMO_PROFILES[r].email.toLowerCase() === email.toLowerCase()
-      );
-
-      const targetRole = foundRole || "SUPER_ADMIN";
-      switchRole(targetRole);
-      router.push("/dashboard");
-      return true;
-    },
-    [switchRole, router]
-  );
-
-  const logout = React.useCallback(() => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("attendly_user");
+    localStorage.removeItem("attendly_active_role");
+    localStorage.setItem("attendly_is_auth", "false");
+    setCurrentUser(EMPTY_USER);
+    setActiveRole("TEACHER");
     setIsAuthenticated(false);
-    try {
-      localStorage.setItem("attendly_is_auth", "false");
-      localStorage.removeItem("token");
-      localStorage.removeItem("refresh_token");
-    } catch {}
     router.push("/login");
   }, [router]);
 
   return (
-    <AuthRoleContext.Provider
-      value={{
-        currentUser: isMounted ? currentUser : DEMO_PROFILES.SUPER_ADMIN,
-        activeRole: isMounted ? activeRole : "SUPER_ADMIN",
-        isAuthenticated: isMounted ? isAuthenticated : true,
-        switchRole,
-        loginAsDemo,
-        login,
-        logout,
-      }}
-    >
+    <AuthRoleContext.Provider value={{ currentUser, activeRole, isAuthenticated, isLoading, login, loginWithGoogle, logout }}>
       {children}
     </AuthRoleContext.Provider>
   );
@@ -160,8 +172,6 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuthRole() {
   const context = React.useContext(AuthRoleContext);
-  if (!context) {
-    throw new Error("useAuthRole must be used within an AuthRoleProvider");
-  }
+  if (!context) throw new Error("useAuthRole must be used within an AuthRoleProvider");
   return context;
 }

@@ -20,6 +20,10 @@ type mockAttendanceRepoForHandler struct {
 	session *domain.AttendanceSessionDetail
 }
 
+func (m *mockAttendanceRepoForHandler) CanTeachClassSubject(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (bool, error) {
+	return true, nil
+}
+
 func (m *mockAttendanceRepoForHandler) GetScheduleByID(_ context.Context, _ uuid.UUID) (*domain.Schedule, error) {
 	return &domain.Schedule{
 		ID:        uuid.New(),

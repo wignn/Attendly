@@ -127,6 +127,7 @@ func TestTeacherHandlerHTTP(t *testing.T) {
 		NIP:      "199002022015012002",
 		FullName: "Ahmad Fauzi",
 		Email:    "ahmad@school.id",
+		Password: "ValidTeacherPass123!",
 	})
 	req = httptest.NewRequest(http.MethodPost, "/teachers", bytes.NewReader(createBody))
 	rec = httptest.NewRecorder()

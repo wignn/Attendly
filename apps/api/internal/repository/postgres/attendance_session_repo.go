@@ -20,6 +20,15 @@ func NewAttendanceSessionRepo(pool *pgxpool.Pool) domain.AttendanceSessionReposi
 	return &AttendanceSessionRepo{pool: pool}
 }
 
+func (r *AttendanceSessionRepo) CanTeachClassSubject(ctx context.Context, teacherID, classID, subjectID uuid.UUID) (bool, error) {
+	var allowed bool
+	err := r.pool.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM teaching_assignments
+		WHERE teacher_id=$1 AND class_id=$2 AND subject_id=$3 AND active
+	)`, teacherID, classID, subjectID).Scan(&allowed)
+	return allowed, err
+}
+
 func (r *AttendanceSessionRepo) GetScheduleByID(ctx context.Context, scheduleID uuid.UUID) (*domain.Schedule, error) {
 	query := `SELECT s.id, s.teaching_assignment_id, s.teacher_id, s.class_id, ta.subject_id, s.academic_year_id,
 		s.day_of_week, s.starts_at::text, s.ends_at::text, s.effective_from::text, s.effective_until::text,

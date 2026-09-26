@@ -104,11 +104,20 @@ func TestTeacherService(t *testing.T) {
 	admin := &domain.User{ID: uuid.New(), IsActive: true, Roles: []domain.Role{domain.RoleSuperAdmin}}
 	teacher := &domain.User{ID: uuid.New(), IsActive: true, Roles: []domain.Role{domain.RoleTeacher}}
 
-	// 1. Teacher cannot create
+	// 1. Teacher cannot list or read all teacher accounts.
+	if _, _, err := svc.List(ctx, teacher, domain.TeacherFilter{}); err != domain.ErrForbidden {
+		t.Fatalf("expected ErrForbidden for teacher list, got %v", err)
+	}
+	if _, err := svc.GetByID(ctx, teacher, uuid.New()); err != domain.ErrForbidden {
+		t.Fatalf("expected ErrForbidden for teacher get, got %v", err)
+	}
+
+	// 2. Teacher cannot create
 	_, err := svc.Create(ctx, teacher, domain.TeacherCreateInput{
 		NIP:      "198501012010011001",
 		FullName: "Guru Budi",
 		Email:    "budi@school.id",
+		Password: "ValidTeacherPass123!",
 	})
 	if err != domain.ErrForbidden {
 		t.Fatalf("expected ErrForbidden for teacher create, got %v", err)
@@ -119,6 +128,7 @@ func TestTeacherService(t *testing.T) {
 		NIP:      "",
 		FullName: "Guru Budi",
 		Email:    "budi@school.id",
+		Password: "ValidTeacherPass123!",
 	})
 	if err != domain.ErrValidation {
 		t.Fatalf("expected ErrValidation for empty NIP, got %v", err)
@@ -129,6 +139,7 @@ func TestTeacherService(t *testing.T) {
 		FullName: "Guru Budi",
 		Email:    "budi@school.id",
 		Phone:    "08123456789",
+		Password: "ValidTeacherPass123!",
 	})
 	if err != nil {
 		t.Fatalf("failed to create teacher: %v", err)
@@ -139,6 +150,7 @@ func TestTeacherService(t *testing.T) {
 		NIP:      "198501012010011001",
 		FullName: "Guru Budi 2",
 		Email:    "budi2@school.id",
+		Password: "ValidTeacherPass123!",
 	})
 	if err != domain.ErrConflict {
 		t.Fatalf("expected ErrConflict for duplicate NIP, got %v", err)
