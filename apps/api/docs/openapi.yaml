@@ -194,6 +194,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Teacher'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /teachers/{teacher_id}:
+    get:
+      tags: [Teachers]
+      summary: Detail guru
+      operationId: getTeacher
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teacher_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Teacher'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Teachers]
+      summary: Update guru (Super Admin)
+      operationId: updateTeacher
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teacher_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nip: { type: string }
+                full_name: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+                status: { type: string, enum: [ACTIVE, INACTIVE] }
+      responses:
+        '200':
+          description: Berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Teacher'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Teachers]
+      summary: Nonaktifkan guru (Super Admin)
+      operationId: deleteTeacher
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teacher_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Berhasil dinonaktifkan }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /students:
     get:
       tags: [Students]

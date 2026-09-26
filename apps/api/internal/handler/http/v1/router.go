@@ -20,6 +20,7 @@ type Handlers struct {
 	AttendanceSession *AttendanceSessionHandler
 	Subject           *SubjectHandler
 	AcademicYear      *AcademicYearHandler
+	Teacher           *TeacherHandler
 }
 
 func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client, userRepository domain.UserRepository) {
@@ -40,6 +41,13 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 			r.Get("/me", h.User.GetMe)
 			r.Get("/users/me", h.User.GetMe)
 			r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/users", h.User.ListUsers)
+			if h.Teacher != nil {
+				r.Get("/teachers", h.Teacher.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/teachers", h.Teacher.Create)
+				r.Get("/teachers/{teacher_id}", h.Teacher.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/teachers/{teacher_id}", h.Teacher.Update)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/teachers/{teacher_id}", h.Teacher.Delete)
+			}
 			if h.Assignments != nil {
 				r.Get("/teaching-assignments", h.Assignments.List)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/teaching-assignments", h.Assignments.Create)
