@@ -62,14 +62,16 @@ func main() {
 	assignmentService := service.NewTeachingAssignmentService(postgres.NewTeachingAssignmentRepo(dbPool))
 	scheduleService := service.NewScheduleService(postgres.NewScheduleRepo(dbPool))
 	studentService := service.NewStudentService(postgres.NewStudentRepo(dbPool))
+	attendanceSessionService := service.NewAttendanceSessionService(postgres.NewAttendanceSessionRepo(dbPool))
 
 	handlers := v1.Handlers{
-		Auth:        v1.NewAuthHandler(authService),
-		User:        v1.NewUserHandler(userService),
-		Attendance:  v1.NewAttendanceReportHandler(reportService),
-		Assignments: v1.NewTeachingAssignmentHandler(assignmentService),
-		Schedules:   v1.NewScheduleHandler(scheduleService),
-		Student:     v1.NewStudentHandler(studentService),
+		Auth:              v1.NewAuthHandler(authService),
+		User:              v1.NewUserHandler(userService),
+		Attendance:        v1.NewAttendanceReportHandler(reportService),
+		Assignments:       v1.NewTeachingAssignmentHandler(assignmentService),
+		Schedules:         v1.NewScheduleHandler(scheduleService),
+		Student:           v1.NewStudentHandler(studentService),
+		AttendanceSession: v1.NewAttendanceSessionHandler(attendanceSessionService),
 	}
 	healthHandler := v1.NewHealthHandler()
 

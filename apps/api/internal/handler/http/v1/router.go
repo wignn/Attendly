@@ -11,12 +11,13 @@ import (
 )
 
 type Handlers struct {
-	Auth        *AuthHandler
-	User        *UserHandler
-	Attendance  *AttendanceReportHandler
-	Assignments *TeachingAssignmentHandler
-	Schedules   *ScheduleHandler
-	Student     *StudentHandler
+	Auth              *AuthHandler
+	User              *UserHandler
+	Attendance        *AttendanceReportHandler
+	Assignments       *TeachingAssignmentHandler
+	Schedules         *ScheduleHandler
+	Student           *StudentHandler
+	AttendanceSession *AttendanceSessionHandler
 }
 
 func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClient *redis.Client, userRepository domain.UserRepository) {
@@ -61,6 +62,14 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/students/{student_id}", h.Student.Delete)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/students/{student_id}/enrollments", h.Student.Enrollments)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/students/{student_id}/enrollments", h.Student.Transfer)
+			}
+			if h.AttendanceSession != nil {
+				r.Get("/attendance-sessions", h.AttendanceSession.List)
+				r.Post("/attendance-sessions", h.AttendanceSession.CreateOrGet)
+				r.Get("/attendance-sessions/{id}", h.AttendanceSession.Get)
+				r.Put("/attendance-sessions/{id}/records", h.AttendanceSession.UpdateRecords)
+				r.Post("/attendance-sessions/{id}/submit", h.AttendanceSession.Submit)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/attendance-sessions/{id}/reopen", h.AttendanceSession.Reopen)
 			}
 			if h.Attendance != nil {
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/dashboard", h.Attendance.AdminDashboard)

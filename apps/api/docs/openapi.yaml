@@ -702,16 +702,179 @@ paths:
       tags: [Attendance]
       summary: Daftar sesi absensi
       operationId: listAttendanceSessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: class_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: subject_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: teacher_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, SUBMITTED, REOPENED] }
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+        - name: from_date
+          in: query
+          schema: { type: string, format: date }
+        - name: to_date
+          in: query
+          schema: { type: string, format: date }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
       responses:
         '200':
           description: Berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAttendanceSessions'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Attendance]
-      summary: Buat atau ambil sesi dari jadwal
+      summary: Buat atau ambil sesi dari jadwal (idempotent)
       operationId: createAttendanceSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAttendanceSessionRequest'
       responses:
+        '200':
+          description: Sesi absensi yang sudah ada diambil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSessionDetailResponse'
         '201':
-          description: Sesi dibuat
+          description: Sesi baru berhasil dibuat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSessionDetailResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /attendance-sessions/{id}:
+    get:
+      tags: [Attendance]
+      summary: Detail sesi absensi beserta daftar siswa
+      operationId: getAttendanceSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Detail sesi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSessionDetailResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /attendance-sessions/{id}/records:
+    put:
+      tags: [Attendance]
+      summary: Batch update catatan absensi sesi draft
+      operationId: updateAttendanceRecords
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAttendanceRecordsRequest'
+      responses:
+        '200':
+          description: Catatan absensi berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSessionDetailResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /attendance-sessions/{id}/submit:
+    post:
+      tags: [Attendance]
+      summary: Kunci dan submit sesi absensi
+      operationId: submitAttendanceSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitSessionRequest'
+      responses:
+        '200':
+          description: Sesi berhasil disubmit dan dikunci
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSessionDetailResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /attendance-sessions/{id}/reopen:
+    post:
+      tags: [Attendance]
+      summary: Buka kembali sesi absensi yang sudah dikunci (Super Admin)
+      operationId: reopenAttendanceSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReopenSessionRequest'
+      responses:
+        '200':
+          description: Sesi absensi berhasil dibuka kembali
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceSessionDetailResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /admin/activities:
     get:
       tags: [Audit Logs]
@@ -1666,3 +1829,152 @@ components:
           type: number
           minimum: 0
           maximum: 100
+    CreateAttendanceSessionRequest:
+      type: object
+      properties:
+        schedule_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+    UpdateAttendanceRecordsRequest:
+      type: object
+      required: [version, records]
+      properties:
+        version:
+          type: integer
+        records:
+          type: array
+          items:
+            type: object
+            required: [student_id, status]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              status:
+                type: string
+                enum: [PRESENT, EXCUSED, SICK, UNEXCUSED_ABSENT]
+              remarks:
+                type: string
+    SubmitSessionRequest:
+      type: object
+      properties:
+        version:
+          type: integer
+    ReopenSessionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+    AttendanceRecordItem:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        student_nis:
+          type: string
+        student_name:
+          type: string
+        status:
+          type: string
+          enum: [PRESENT, EXCUSED, SICK, UNEXCUSED_ABSENT]
+        remarks:
+          type: string
+        recorded_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AttendanceSessionDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        schedule_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        class_name:
+          type: string
+        subject_id:
+          type: string
+          format: uuid
+        subject_name:
+          type: string
+        teacher_id:
+          type: string
+          format: uuid
+        teacher_name:
+          type: string
+        held_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, REOPENED]
+        version:
+          type: integer
+        submitted_by:
+          type: string
+          format: uuid
+        submitted_at:
+          type: string
+          format: date-time
+        reopened_by:
+          type: string
+          format: uuid
+        reopened_at:
+          type: string
+          format: date-time
+        reopen_reason:
+          type: string
+        total_students:
+          type: integer
+        present_count:
+          type: integer
+        excused_count:
+          type: integer
+        sick_count:
+          type: integer
+        absent_count:
+          type: integer
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceRecordItem'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AttendanceSessionDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AttendanceSessionDetail'
+    PaginatedAttendanceSessions:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AttendanceSessionDetail'
