@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useAuthRole } from "@/context/auth-role-context";
 import { useAttendanceDate } from "@/context/attendance-date-context";
+import { TeacherMapelStatistics } from "@/components/dashboard/teacher-mapel-statistics";
 import {
   initialDashboardMetrics,
   weeklyTrends,
@@ -18,8 +20,15 @@ import {
 } from "lucide-react";
 
 export default function DashboardPage() {
+  const { activeRole } = useAuthRole();
   const { fullDisplayDate, activeDayName } = useAttendanceDate();
 
+  // Jika user adalah Guru Mapel atau Wali Kelas, tampilkan Dashboard Statistik Mapel Sesuai Referensi Pengguna
+  if (activeRole === "TEACHER" || activeRole === "HOMEROOM_TEACHER") {
+    return <TeacherMapelStatistics />;
+  }
+
+  // Tampilan Dashboard Super Admin Utama
   return (
     <div className="space-y-6">
       {/* 1. Baris Info Tanggal Aktif Terpilih */}

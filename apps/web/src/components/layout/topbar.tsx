@@ -52,22 +52,22 @@ export function Topbar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Compute dynamic topbar titles based on role if not explicitly provided
+  // Compute dynamic topbar titles based on role & homeroom assignment if not explicitly provided
   const displayTitle =
     title ||
     (activeRole === "SUPER_ADMIN"
       ? "Dashboard Administrator"
-      : activeRole === "TEACHER"
-      ? "Jadwal Mengajar Hari Ini"
-      : "Monitoring Kehadiran Rombel 7A");
+      : currentUser.homeroomClass
+      ? `Portal Guru & Wali Kelas ${currentUser.homeroomClass}`
+      : "Portal Guru Mata Pelajaran");
 
   const displaySubtitle =
     subtitle ||
     (activeRole === "SUPER_ADMIN"
       ? "Sistem Absensi SMPN 1 Tirtajaya"
-      : activeRole === "TEACHER"
-      ? `${currentUser.name} • ${currentUser.subject || "Guru Mata Pelajaran"}`
-      : `${currentUser.name} • Wali Kelas ${currentUser.homeroomClass || "7A"}`);
+      : currentUser.homeroomClass
+      ? `${currentUser.name} • Guru ${currentUser.subject || "Mapel"} & Wali Kelas ${currentUser.homeroomClass}`
+      : `${currentUser.name} • Guru ${currentUser.subject || "Mata Pelajaran"}`);
 
   return (
     <header className="bg-white border-b border-amber-100/70 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xs sticky top-0 z-30">
@@ -153,9 +153,9 @@ export function Topbar({
             <span className="font-bold text-[#0c3960]">
               {activeRole === "SUPER_ADMIN"
                 ? "👑 Super Admin"
-                : activeRole === "TEACHER"
-                ? "👩‍🏫 Guru Mapel"
-                : "👨‍🏫 Wali Kelas"}
+                : currentUser.homeroomClass
+                ? `👨‍🏫 Guru & Wali ${currentUser.homeroomClass}`
+                : "👩‍🏫 Guru Mapel"}
             </span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>

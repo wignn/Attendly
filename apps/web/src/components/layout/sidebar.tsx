@@ -32,46 +32,40 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const { currentUser, activeRole, logout } = useAuthRole();
 
-  // Navigation Items according to Active Role
+  // Navigation Items according to Active Role & Assignment
   const navSections = React.useMemo(() => {
-    if (activeRole === "TEACHER") {
-      return [
+    if (activeRole === "TEACHER" || activeRole === "HOMEROOM_TEACHER") {
+      const sections = [
         {
           heading: "TUGAS GURU MAPEL",
           items: [
             { href: "/portal-guru", label: "Jadwal Mengajar", icon: CalendarCheck },
             { href: "/absensi", label: "Presensi Mengajar", icon: ClipboardCheck },
-            { href: "/dashboard", label: "Statistik Kehadiran", icon: BarChart3 },
-          ],
-        },
-        {
-          heading: "TUGAS WALI KELAS",
-          items: [
-            { href: "/siswa", label: "Wali Kelas (7B)", icon: UsersRound },
-            { href: "/audit", label: "Riwayat Sesi Selesai", icon: History },
+            { href: "/dashboard", label: "Statistik Kehadiran Mapel", icon: BarChart3 },
           ],
         },
       ];
-    }
 
-    if (activeRole === "HOMEROOM_TEACHER") {
-      return [
-        {
+      // Fitur Wali Kelas HANYA tampil jika guru ditugaskan sebagai Wali Kelas
+      if (currentUser.homeroomClass) {
+        sections.push({
           heading: "TUGAS WALI KELAS",
           items: [
-            { href: "/dashboard", label: "Rekap Kehadiran 7A", icon: BarChart3 },
-            { href: "/siswa", label: "Data Siswa Rombel 7A", icon: UsersRound },
-            { href: "/absensi", label: "Laporan Absensi Rombel", icon: ClipboardCheck },
+            {
+              href: "/siswa",
+              label: `Wali Kelas (${currentUser.homeroomClass})`,
+              icon: UsersRound,
+            },
+            {
+              href: "/audit",
+              label: "Riwayat Sesi Selesai",
+              icon: History,
+            },
           ],
-        },
-        {
-          heading: "TUGAS GURU MAPEL",
-          items: [
-            { href: "/portal-guru", label: "Jadwal Mengajar (MTK)", icon: CalendarCheck },
-            { href: "/audit", label: "Riwayat Sesi", icon: History },
-          ],
-        },
-      ];
+        });
+      }
+
+      return sections;
     }
 
     // Default: SUPER_ADMIN
