@@ -9,4 +9,5 @@ ALTER TABLE attendance_records
 DROP INDEX idx_students_nisn_unique;
 ALTER TABLE students
     DROP COLUMN deleted_at,
+    DROP COLUMN updated_at,
     DROP COLUMN nisn;

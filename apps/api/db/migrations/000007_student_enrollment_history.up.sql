@@ -1,6 +1,11 @@
 ALTER TABLE students
     ADD COLUMN nisn VARCHAR(50),
-    ADD COLUMN deleted_at TIMESTAMPTZ;
+    ADD COLUMN deleted_at TIMESTAMPTZ,
+    ADD COLUMN updated_at TIMESTAMPTZ;
+UPDATE students SET updated_at = created_at;
+ALTER TABLE students
+    ALTER COLUMN updated_at SET DEFAULT NOW(),
+    ALTER COLUMN updated_at SET NOT NULL;
 
 CREATE UNIQUE INDEX idx_students_nisn_unique
     ON students (nisn)
