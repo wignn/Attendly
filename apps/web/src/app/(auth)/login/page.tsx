@@ -90,7 +90,7 @@ export default function LoginPage() {
             >
               <GraduationCap className="w-4 h-4 text-blue-600 mb-1" />
               <span className="text-[11px] font-bold leading-tight">Guru Mapel</span>
-              <span className="text-[9px] text-slate-500">Bu Siti (BIN)</span>
+              <span className="text-[9px] text-slate-500">Bu Siti (Non-Wali)</span>
             </button>
 
             <button
@@ -99,8 +99,8 @@ export default function LoginPage() {
               className="flex flex-col items-center p-2 rounded-xl border border-amber-200 bg-amber-50/60 hover:bg-amber-100 text-amber-900 text-left transition cursor-pointer"
             >
               <UsersRound className="w-4 h-4 text-amber-600 mb-1" />
-              <span className="text-[11px] font-bold leading-tight">Wali Kelas</span>
-              <span className="text-[9px] text-slate-500">Pak Budi (7A)</span>
+              <span className="text-[11px] font-bold leading-tight">Guru & Wali</span>
+              <span className="text-[9px] text-slate-500">Pak Budi (Wali 7A)</span>
             </button>
           </div>
         </div>

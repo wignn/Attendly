@@ -35,7 +35,6 @@ export const DEMO_PROFILES: Record<UserRole, AuthUser> = {
     nip: "198503152010012015",
     roleLabel: "Guru Mata Pelajaran",
     subject: "Bahasa Indonesia",
-    homeroomClass: "7B",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&h=120&q=80",
   },
   HOMEROOM_TEACHER: {
@@ -44,7 +43,7 @@ export const DEMO_PROFILES: Record<UserRole, AuthUser> = {
     email: "budi.santoso@smpn1tirtajaya.sch.id",
     role: "HOMEROOM_TEACHER",
     nip: "198207122008011009",
-    roleLabel: "Guru & Wali Kelas",
+    roleLabel: "Guru Mapel & Wali Kelas",
     subject: "Matematika",
     homeroomClass: "7A",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80",
@@ -111,7 +110,11 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
   const loginAsDemo = React.useCallback(
     (role: UserRole) => {
       switchRole(role);
-      router.push("/dashboard");
+      if (role === "SUPER_ADMIN") {
+        router.push("/dashboard");
+      } else {
+        router.push("/portal-guru");
+      }
     },
     [switchRole, router]
   );
@@ -125,7 +128,11 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
 
       const targetRole = foundRole || "SUPER_ADMIN";
       switchRole(targetRole);
-      router.push("/dashboard");
+      if (targetRole === "SUPER_ADMIN") {
+        router.push("/dashboard");
+      } else {
+        router.push("/portal-guru");
+      }
       return true;
     },
     [switchRole, router]
