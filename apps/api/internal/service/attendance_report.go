@@ -33,7 +33,7 @@ func (s *AttendanceReportService) AdminDashboard(ctx context.Context, user *doma
 }
 
 func (s *AttendanceReportService) TeacherDashboard(ctx context.Context, user *domain.User) (domain.TeacherDashboard, error) {
-	if user == nil || !user.HasRole(domain.RoleTeacher) {
+	if user == nil || (!user.HasRole(domain.RoleTeacher) && !user.HasRole(domain.RoleSuperAdmin) && !user.HasRole(domain.RoleHomeroomTeacher)) {
 		return domain.TeacherDashboard{}, domain.ErrForbidden
 	}
 	dashboard, err := s.repo.TeacherDashboard(ctx, user.ID)
@@ -93,7 +93,7 @@ func (s *AttendanceReportService) StudentSummary(ctx context.Context, user *doma
 }
 
 func (s *AttendanceReportService) SubjectClasses(ctx context.Context, user *domain.User, subjectID uuid.UUID, page, perPage int32) ([]domain.SubjectClassReport, int64, error) {
-	if user == nil || (!user.HasRole(domain.RoleSuperAdmin) && !user.HasRole(domain.RoleTeacher)) {
+	if user == nil || (!user.HasRole(domain.RoleSuperAdmin) && !user.HasRole(domain.RoleTeacher) && !user.HasRole(domain.RoleHomeroomTeacher)) {
 		return nil, 0, domain.ErrForbidden
 	}
 	if !user.HasRole(domain.RoleSuperAdmin) {
