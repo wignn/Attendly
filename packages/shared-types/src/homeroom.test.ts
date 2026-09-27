@@ -1,11 +1,49 @@
 import { describe, it, expect } from "vitest";
 import {
   HomeroomDashboardSchema,
+  TeacherDashboardSchema,
   ClassAttendanceReportSchema,
   StudentAttendanceSummarySchema,
 } from "./homeroom";
 
 describe("Homeroom Shared Types Validation", () => {
+  it("should validate a valid teacher dashboard payload with nullable homeroom_teacher_id", () => {
+    const payload = {
+      attendance: {
+        present: 30,
+        excused: 1,
+        sick: 1,
+        unexcused_absent: 0,
+        total_recorded_sessions: 32,
+      },
+      attendance_rate: 93.75,
+      classes: [
+        {
+          class: {
+            id: "11111111-1111-4111-8111-111111111111",
+            name: "Kelas 7A",
+            homeroom_teacher_id: null,
+          },
+          subject: {
+            id: "33333333-3333-4333-8333-333333333333",
+            name: "Matematika",
+          },
+          counts: {
+            present: 30,
+            excused: 1,
+            sick: 1,
+            unexcused_absent: 0,
+            total_recorded_sessions: 32,
+          },
+          attendance_rate: 93.75,
+        },
+      ],
+    };
+
+    const result = TeacherDashboardSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
   it("should validate a valid homeroom dashboard payload", () => {
     const payload = {
       attendance: {

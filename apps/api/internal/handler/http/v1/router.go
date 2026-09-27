@@ -116,10 +116,10 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 			if h.Attendance != nil {
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/dashboard", h.Attendance.AdminDashboard)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/admin/activities", h.Attendance.Activities)
-				r.With(middleware.RequireRole(domain.RoleTeacher)).Get("/teachers/me/dashboard", h.Attendance.TeacherDashboard)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/teachers/me/dashboard", h.Attendance.TeacherDashboard)
 				r.With(middleware.RequireRole(domain.RoleHomeroomTeacher)).Get("/teachers/me/homeroom-dashboard", h.Attendance.HomeroomDashboard)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleHomeroomTeacher)).Get("/students/{student_id}/attendance-summary", h.Attendance.StudentSummary)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Get("/reports/subject-attendance", h.Attendance.SubjectAttendance)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/reports/subject-attendance", h.Attendance.SubjectAttendance)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Get("/reports/classes/{class_id}/attendance", h.Attendance.ClassAttendance)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleHomeroomTeacher)).Get("/reports/homeroom/{class_id}", h.Attendance.HomeroomReport)
 			}

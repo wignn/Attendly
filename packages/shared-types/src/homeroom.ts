@@ -4,7 +4,7 @@ import { AttendanceCountsSchema } from "./dashboard";
 export const SchoolClassSummarySchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
-  homeroom_teacher_id: z.string().uuid(),
+  homeroom_teacher_id: z.string().uuid().optional().nullable(),
 });
 export type SchoolClassSummaryDto = z.infer<typeof SchoolClassSummarySchema>;
 
@@ -21,6 +21,13 @@ export const SubjectClassReportSchema = z.object({
   attendance_rate: z.number(),
 });
 export type SubjectClassReportDto = z.infer<typeof SubjectClassReportSchema>;
+
+export const TeacherDashboardSchema = z.object({
+  attendance: AttendanceCountsSchema,
+  attendance_rate: z.number(),
+  classes: z.array(SubjectClassReportSchema),
+});
+export type TeacherDashboardDto = z.infer<typeof TeacherDashboardSchema>;
 
 export const HomeroomDashboardSchema = z.object({
   attendance: AttendanceCountsSchema,
