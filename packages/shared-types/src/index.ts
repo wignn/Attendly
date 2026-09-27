@@ -4,3 +4,4 @@ export * from "./auth";
 export * from "./dashboard";
 export * from "./teacher";
 export * from "./homeroom";
+export * from "./attendance";

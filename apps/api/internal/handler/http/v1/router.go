@@ -69,7 +69,7 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 			}
 			if h.Schedules != nil {
 				r.Get("/schedules/today", h.Schedules.Today)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/schedules", h.Schedules.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/schedules", h.Schedules.List)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/schedules", h.Schedules.Create)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/schedules/{schedule_id}", h.Schedules.Get)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/schedules/{schedule_id}", h.Schedules.Update)
@@ -100,11 +100,11 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/academic-years/{id}/activate", h.AcademicYear.Activate)
 			}
 			if h.AttendanceSession != nil {
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Get("/attendance-sessions", h.AttendanceSession.List)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Post("/attendance-sessions", h.AttendanceSession.CreateOrGet)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Get("/attendance-sessions/{id}", h.AttendanceSession.Get)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Put("/attendance-sessions/{id}/records", h.AttendanceSession.UpdateRecords)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Post("/attendance-sessions/{id}/submit", h.AttendanceSession.Submit)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/attendance-sessions", h.AttendanceSession.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Post("/attendance-sessions", h.AttendanceSession.CreateOrGet)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/attendance-sessions/{id}", h.AttendanceSession.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Put("/attendance-sessions/{id}/records", h.AttendanceSession.UpdateRecords)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Post("/attendance-sessions/{id}/submit", h.AttendanceSession.Submit)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/attendance-sessions/{id}/reopen", h.AttendanceSession.Reopen)
 			}
 			if h.ExportAudit != nil {
