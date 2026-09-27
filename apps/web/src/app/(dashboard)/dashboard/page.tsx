@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuthRole } from "@/context/auth-role-context";
 import { useAttendanceDate } from "@/context/attendance-date-context";
 import { TeacherMapelStatistics } from "@/components/dashboard/teacher-mapel-statistics";
+import { HomeroomTeacherDashboard } from "@/components/dashboard/homeroom-teacher-dashboard";
 import {
   useAdminDashboard,
   useAdminActivities,
@@ -65,11 +66,50 @@ function formatActivityTime(isoString: string): string {
 }
 
 export default function DashboardPage() {
-  const { activeRole } = useAuthRole();
+  const { activeRole, currentUser } = useAuthRole();
   const { fullDisplayDate, activeDayName } = useAttendanceDate();
+  const [activeTab, setActiveTab] = React.useState<"HOMEROOM" | "TEACHER">("HOMEROOM");
 
-  // Jika user adalah Guru Mapel atau Wali Kelas, tampilkan Dashboard Statistik Mapel Sesuai Referensi Pengguna
-  if (activeRole === "TEACHER" || activeRole === "HOMEROOM_TEACHER") {
+  const hasTeacherRole = activeRole === "TEACHER" || currentUser.roles.includes("TEACHER");
+
+  // Jika user adalah Wali Kelas, tampilkan Dashboard Rekapitulasi Kehadiran Kelas Wali
+  if (activeRole === "HOMEROOM_TEACHER") {
+    if (hasTeacherRole) {
+      return (
+        <div className="space-y-4">
+          <div className="max-w-6xl mx-auto flex items-center justify-between border-b border-slate-200 pb-3">
+            <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl">
+              <button
+                onClick={() => setActiveTab("HOMEROOM")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  activeTab === "HOMEROOM"
+                    ? "bg-[#0c3960] text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Rekap Kelas Wali
+              </button>
+              <button
+                onClick={() => setActiveTab("TEACHER")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  activeTab === "TEACHER"
+                    ? "bg-[#0c3960] text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Statistik Mapel Saya
+              </button>
+            </div>
+          </div>
+          {activeTab === "HOMEROOM" ? <HomeroomTeacherDashboard /> : <TeacherMapelStatistics />}
+        </div>
+      );
+    }
+    return <HomeroomTeacherDashboard />;
+  }
+
+  // Jika user adalah Guru Mapel biasa, tampilkan Statistik Kehadiran Mapel
+  if (activeRole === "TEACHER") {
     return <TeacherMapelStatistics />;
   }
 
