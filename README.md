@@ -16,7 +16,20 @@ Production-grade, enterprise-ready polyglot monorepo combining a high-performanc
 - Go 1.24+
 - Node.js 22+ & pnpm 10+
 
-### 2. Initialization & Dev Setup
+### 2. Full-Stack Docker Deployment (Project Lengkap)
+Untuk menjalankan seluruh layanan (PostgreSQL, Redis, Mailpit, Database Migration, Backend API, dan Frontend Web) dalam container:
+```bash
+# Jalankan seluruh stack
+docker compose up -d --build
+
+# Pantau log
+docker compose logs -f
+
+# Hentikan seluruh stack
+docker compose down
+```
+
+### 3. Local Development Setup
 ```bash
 # 1. Install all dependencies
 make init

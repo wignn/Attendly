@@ -1,0 +1,139 @@
+name: komas
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: komas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-komas_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-komas_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - komas-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: komas-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - komas-network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: komas-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - komas-network
+
+  migration:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: komas-api:latest
+    container_name: komas-migration
+    restart: "no"
+    command: ["/app/migrate", "up"]
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-komas_db}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - komas-network
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: komas-api:latest
+    container_name: komas-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - ENV=${ENV:-development}
+      - APP_NAME=komas-api
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-komas_db}
+      - DB_SSLMODE=disable
+      - DATABASE_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-komas_db}?sslmode=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET:-super-secret-jwt-key-for-development-must-be-32-bytes}
+      - JWT_ACCESS_TTL_MINUTES=${JWT_ACCESS_TTL_MINUTES:-15}
+      - JWT_REFRESH_TTL_DAYS=${JWT_REFRESH_TTL_DAYS:-7}
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-admin@example.com}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - komas-network
+
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    image: komas-web:latest
+    container_name: komas-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - komas-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  komas-network:
+    driver: bridge

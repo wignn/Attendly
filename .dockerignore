@@ -1,0 +1,23 @@
+# Dependency directories
+node_modules
+apps/*/node_modules
+packages/*/node_modules
+
+# Build artifacts and caches
+.next
+apps/web/.next
+.turbo
+dist
+build
+bin
+coverage
+*.tsbuildinfo
+
+# Version control and tooling
+.git
+.gitignore
+.claude
+*.log
+.env*.local
+.DS_Store
+Thumbs.db

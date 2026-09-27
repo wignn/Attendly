@@ -1,4 +1,4 @@
-.PHONY: init dev build test lint clean db-up db-down migrate-up migrate-down sqlc swagger
+.PHONY: init dev build test lint clean db-up db-down docker-up docker-down migrate-up migrate-down sqlc swagger
 
 init:
 	pnpm install
@@ -21,6 +21,12 @@ db-up:
 
 db-down:
 	docker compose -f docker/docker-compose.yml down
+
+docker-up:
+	docker compose up -d --build
+
+docker-down:
+	docker compose down
 
 migrate-up:
 	cd apps/api && go run cmd/migrate/main.go up
