@@ -127,3 +127,20 @@ export interface AttendanceSessionFilterDto {
   page?: number;
   per_page?: number;
 }
+
+export const ClassOptionSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  grade: z.string().optional(),
+  section: z.string().optional(),
+});
+export type ClassOptionDto = z.infer<typeof ClassOptionSchema>;
+
+export const SubjectOptionSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+});
+export type SubjectOptionDto = z.infer<typeof SubjectOptionSchema>;
+

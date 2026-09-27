@@ -6,7 +6,10 @@ import {
   CreateAttendanceSessionDto,
   UpdateAttendanceRecordsDto,
   SubmitSessionDto,
+  ReopenSessionDto,
   ScheduleItemDto,
+  ClassOptionDto,
+  SubjectOptionDto,
 } from "@komas/shared-types";
 
 export function useAttendanceSessions(filter: AttendanceSessionFilterDto = {}) {
@@ -152,3 +155,47 @@ export function useSubmitAttendanceSession() {
     },
   });
 }
+
+export function useReopenAttendanceSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ReopenSessionDto }) =>
+      fetchApi<AttendanceSessionDetailDto>(
+        `/api/v1/attendance-sessions/${id}/reopen`,
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      ),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["attendance-sessions", id] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["teachers", "me", "dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+    },
+  });
+}
+
+export function useClassesOptions() {
+  return useQuery({
+    queryKey: ["classes", "options"],
+    queryFn: async (): Promise<ClassOptionDto[]> => {
+      const result = await fetchPaginatedApi<ClassOptionDto[]>("/api/v1/classes?per_page=100");
+      return result.data || [];
+    },
+    staleTime: 1000 * 60 * 5, // 5 mins
+  });
+}
+
+export function useSubjectsOptions() {
+  return useQuery({
+    queryKey: ["subjects", "options"],
+    queryFn: async (): Promise<SubjectOptionDto[]> => {
+      const result = await fetchPaginatedApi<SubjectOptionDto[]>("/api/v1/subjects?per_page=100");
+      return result.data || [];
+    },
+    staleTime: 1000 * 60 * 5, // 5 mins
+  });
+}
+

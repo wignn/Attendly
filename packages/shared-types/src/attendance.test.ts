@@ -7,6 +7,8 @@ import {
   SubmitSessionSchema,
   ReopenSessionSchema,
   ScheduleItemSchema,
+  ClassOptionSchema,
+  SubjectOptionSchema,
 } from "./attendance";
 
 describe("Attendance Shared Types Validation", () => {
@@ -152,6 +154,28 @@ describe("Attendance Shared Types Validation", () => {
     };
 
     const result = ScheduleItemSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
+  it("should validate class option schema", () => {
+    const payload = {
+      id: "11111111-1111-4111-8111-111111111111",
+      code: "7A",
+      name: "Kelas 7A",
+      grade: "7",
+      section: "A",
+    };
+    const result = ClassOptionSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+  });
+
+  it("should validate subject option schema", () => {
+    const payload = {
+      id: "22222222-2222-4222-8222-222222222222",
+      code: "BINDO",
+      name: "Bahasa Indonesia",
+    };
+    const result = SubjectOptionSchema.safeParse(payload);
     expect(result.success).toBe(true);
   });
 });
