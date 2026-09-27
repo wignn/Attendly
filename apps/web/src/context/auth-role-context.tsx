@@ -56,6 +56,7 @@ interface AuthRoleContextType {
   login: (email: string, password: string) => Promise<boolean>;
   loginWithGoogle: (idToken: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  switchRole: (role: UserRole) => void;
 }
 
 const AuthRoleContext = React.createContext<AuthRoleContextType | undefined>(undefined);
@@ -68,7 +69,14 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = React.useState(true);
 
   const acceptSession = React.useCallback((userData: AuthTokenResponseDto["user"]) => {
-    const role = determinePrimaryRole(userData.roles);
+    let savedRole: UserRole | null = null;
+    try {
+      savedRole = localStorage.getItem("attendly_active_role") as UserRole | null;
+    } catch {}
+
+    const primaryRole = determinePrimaryRole(userData.roles);
+    const role = savedRole && userData.roles?.includes(savedRole) ? savedRole : primaryRole;
+
     const user: AuthUser = {
       id: userData.id,
       name: userData.name,
@@ -188,6 +196,25 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }, [router]);
 
+  const switchRole = React.useCallback(
+    (newRole: UserRole) => {
+      if (currentUser.roles.includes(newRole)) {
+        setActiveRole(newRole);
+        setCurrentUser((prev) => ({
+          ...prev,
+          role: newRole,
+          roleLabel: getRoleLabel(newRole),
+        }));
+        try {
+          localStorage.setItem("attendly_active_role", newRole);
+        } catch {
+          // Keep role in memory if localStorage is inaccessible
+        }
+      }
+    },
+    [currentUser.roles]
+  );
+
   return (
     <AuthRoleContext.Provider
       value={{
@@ -198,6 +225,7 @@ export function AuthRoleProvider({ children }: { children: React.ReactNode }) {
         login,
         loginWithGoogle,
         logout,
+        switchRole,
       }}
     >
       {children}

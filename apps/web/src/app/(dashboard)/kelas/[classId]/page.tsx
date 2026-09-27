@@ -21,12 +21,17 @@ import {
   useStudentAttendanceSummary,
 } from "@/hooks/use-homeroom-dashboard";
 import { useSubjectsOptions } from "@/hooks/use-attendance-sessions";
+import { useAuthRole } from "@/context/auth-role-context";
 import { StudentAttendanceSummaryDto } from "@komas/shared-types";
 
 export default function ClassAttendanceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { currentUser } = useAuthRole();
+  const isSuperAdmin = currentUser.roles.includes("SUPER_ADMIN");
+  const backHref = isSuperAdmin ? "/kelas" : "/portal-guru";
+  const backLabel = isSuperAdmin ? "Kembali ke Daftar Kelas" : "Kembali ke Portal Guru";
 
   const classId = (params?.classId as string) || null;
   const currentSubjectId = searchParams.get("subject_id") || "";
@@ -170,11 +175,11 @@ export default function ClassAttendanceDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <Link
-              href="/kelas"
+              href={backHref}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-[#0c3960] transition mb-1 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
-              <span>Kembali ke Daftar Kelas</span>
+              <span>{backLabel}</span>
             </Link>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
