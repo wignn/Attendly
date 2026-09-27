@@ -640,6 +640,12 @@ export default function GuruPage() {
                 </div>
               )}
 
+              {!editingTeacher && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[#0c3960] text-[11px] leading-relaxed">
+                  <span className="font-bold">Info Login:</span> Password default akun guru otomatis menggunakan <strong>NIP</strong> yang didaftarkan. Guru dapat langsung login menggunakan Email dan NIP mereka.
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"

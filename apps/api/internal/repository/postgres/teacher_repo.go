@@ -109,12 +109,15 @@ func (r *TeacherRepo) Create(ctx context.Context, input domain.TeacherCreateInpu
 
 	pwd := strings.TrimSpace(input.Password)
 	if pwd == "" {
+		pwd = strings.TrimSpace(input.NIP)
+	}
+	if pwd == "" {
 		secret := make([]byte, 32)
 		if _, err := rand.Read(secret); err != nil {
 			return nil, err
 		}
 		pwd = base64.RawURLEncoding.EncodeToString(secret)
-	} else if len(pwd) < 12 {
+	} else if input.Password != "" && len(pwd) < 12 {
 		return nil, domain.ErrValidation
 	}
 	hashed, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
