@@ -50,3 +50,37 @@ export function useStudentAttendanceSummary(studentId: string | null) {
     retry: 1,
   });
 }
+
+export function useClassAttendanceReport(
+  classId: string | null,
+  subjectId: string | null = null,
+  page: number = 1,
+  perPage: number = 20
+) {
+  return useQuery({
+    queryKey: [
+      "reports",
+      "classes",
+      classId,
+      "attendance",
+      { subjectId, page, perPage },
+    ],
+    queryFn: async (): Promise<PaginatedResult<ClassAttendanceReportDto>> => {
+      const searchParams = new URLSearchParams();
+      if (subjectId && subjectId !== "ALL") searchParams.set("subject_id", subjectId);
+      if (page) searchParams.set("page", page.toString());
+      if (perPage) searchParams.set("per_page", perPage.toString());
+
+      const queryStr = searchParams.toString();
+      const endpoint =
+        subjectId && subjectId !== "ALL"
+          ? `/api/v1/reports/classes/${classId}/attendance?${queryStr}`
+          : `/api/v1/reports/homeroom/${classId}?${queryStr}`;
+
+      return fetchPaginatedApi<ClassAttendanceReportDto>(endpoint);
+    },
+    enabled: Boolean(classId),
+    staleTime: 1000 * 30,
+    retry: 1,
+  });
+}

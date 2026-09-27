@@ -121,7 +121,7 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleHomeroomTeacher)).Get("/students/{student_id}/attendance-summary", h.Attendance.StudentSummary)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Get("/reports/subject-attendance", h.Attendance.SubjectAttendance)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher)).Get("/reports/classes/{class_id}/attendance", h.Attendance.ClassAttendance)
-				r.With(middleware.RequireRole(domain.RoleHomeroomTeacher)).Get("/reports/homeroom/{class_id}", h.Attendance.HomeroomReport)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleHomeroomTeacher)).Get("/reports/homeroom/{class_id}", h.Attendance.HomeroomReport)
 			}
 		})
 	})
