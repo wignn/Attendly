@@ -12,6 +12,55 @@ function getBaseUrl(): string {
 
 const API_BASE_URL = getBaseUrl();
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function requestTokenRefresh(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const refreshToken = localStorage.getItem("refresh_token");
+  if (!refreshToken) return null;
+
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const url = `${API_BASE_URL}/api/v1/auth/refresh`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Refresh failed");
+      }
+
+      const json = await res.json();
+      if (!json.success || !json.data?.access_token) {
+        throw new Error("Invalid refresh response");
+      }
+
+      const newAccessToken = json.data.access_token as string;
+      const newRefreshToken = (json.data.refresh_token as string) || refreshToken;
+
+      localStorage.setItem("token", newAccessToken);
+      localStorage.setItem("refresh_token", newRefreshToken);
+      return newAccessToken;
+    } catch {
+      localStorage.removeItem("token");
+      localStorage.removeItem("refresh_token");
+      localStorage.removeItem("attendly_user");
+      localStorage.setItem("attendly_is_auth", "false");
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 export class ApiError extends Error {
   constructor(
     public code: string,
@@ -55,6 +104,24 @@ export async function fetchApi<T>(
       "NETWORK_ERROR",
       "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL
     );
+  }
+
+  if (res.status === 401 && !endpoint.includes("/auth/")) {
+    const refreshedToken = await requestTokenRefresh();
+    if (refreshedToken) {
+      headers.set("Authorization", `Bearer ${refreshedToken}`);
+      try {
+        res = await fetch(url, {
+          ...options,
+          headers,
+        });
+      } catch (err: any) {
+        throw new ApiError(
+          "NETWORK_ERROR",
+          "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL
+        );
+      }
+    }
   }
 
   let body: ApiResponse<T>;
@@ -105,6 +172,24 @@ export async function fetchPaginatedApi<T>(
       "NETWORK_ERROR",
       "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL
     );
+  }
+
+  if (res.status === 401 && !endpoint.includes("/auth/")) {
+    const refreshedToken = await requestTokenRefresh();
+    if (refreshedToken) {
+      headers.set("Authorization", `Bearer ${refreshedToken}`);
+      try {
+        res = await fetch(url, {
+          ...options,
+          headers,
+        });
+      } catch (err: any) {
+        throw new ApiError(
+          "NETWORK_ERROR",
+          "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL
+        );
+      }
+    }
   }
 
   let body: ApiResponse<T>;

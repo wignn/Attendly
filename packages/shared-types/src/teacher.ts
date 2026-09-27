@@ -41,3 +41,18 @@ export const TeacherFilterSchema = z.object({
   per_page: z.number().int().positive().optional(),
 });
 export type TeacherFilterDto = z.infer<typeof TeacherFilterSchema>;
+
+export const TeachingAssignmentRecordSchema = z.object({
+  id: z.string().uuid(),
+  teacher_id: z.string().uuid(),
+  class_id: z.string().uuid(),
+  subject_id: z.string().uuid(),
+  academic_year_id: z.string().uuid(),
+  active: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type TeachingAssignmentRecordDto = z.infer<
+  typeof TeachingAssignmentRecordSchema
+>;
+

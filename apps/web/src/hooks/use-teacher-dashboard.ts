@@ -3,6 +3,7 @@ import { fetchApi, fetchPaginatedApi, PaginatedResult } from "@/lib/api-client";
 import {
   TeacherDashboardDto,
   SubjectClassReportDto,
+  TeachingAssignmentRecordDto,
 } from "@komas/shared-types";
 
 export function useTeacherDashboard() {
@@ -38,3 +39,25 @@ export function useSubjectAttendanceReport(
     retry: 1,
   });
 }
+
+export function useTeacherAssignments(
+  page: number = 1,
+  perPage: number = 50
+) {
+  return useQuery({
+    queryKey: ["teaching-assignments", { page, perPage }],
+    queryFn: async (): Promise<PaginatedResult<TeachingAssignmentRecordDto[]>> => {
+      const searchParams = new URLSearchParams();
+      if (page) searchParams.set("page", page.toString());
+      if (perPage) searchParams.set("per_page", perPage.toString());
+
+      const queryStr = searchParams.toString();
+      return fetchPaginatedApi<TeachingAssignmentRecordDto[]>(
+        `/api/v1/teaching-assignments${queryStr ? `?${queryStr}` : ""}`
+      );
+    },
+    staleTime: 1000 * 60,
+    retry: 1,
+  });
+}
+

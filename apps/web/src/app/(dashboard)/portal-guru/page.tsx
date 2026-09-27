@@ -9,7 +9,10 @@ import {
   useAttendanceSessions,
   useTodaySchedules,
   useCreateOrGetSession,
+  useClassesOptions,
+  useSubjectsOptions,
 } from "@/hooks/use-attendance-sessions";
+import { useTeacherAssignments } from "@/hooks/use-teacher-dashboard";
 import {
   CalendarDays,
   Clock,
@@ -20,6 +23,8 @@ import {
   RefreshCw,
   PlusCircle,
   Check,
+  BookOpen,
+  GraduationCap,
 } from "lucide-react";
 
 export default function PortalGuruPage() {
@@ -41,10 +46,35 @@ export default function PortalGuruPage() {
     isLoading: isLoadingSchedules,
   } = useTodaySchedules();
 
+  const { data: classesOptions = [] } = useClassesOptions();
+  const { data: subjectsOptions = [] } = useSubjectsOptions();
+  const {
+    data: assignmentsData,
+    isLoading: isLoadingAssignments,
+    refetch: refetchAssignments,
+  } = useTeacherAssignments();
+
   const createOrGetMutation = useCreateOrGetSession();
 
   const sessions = sessionsData?.data || [];
   const todaySchedules = schedulesData?.data || [];
+  const assignments = assignmentsData?.data || [];
+
+  const classMap = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const c of classesOptions) {
+      map[c.id] = c.name;
+    }
+    return map;
+  }, [classesOptions]);
+
+  const subjectMap = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of subjectsOptions) {
+      map[s.id] = s.name;
+    }
+    return map;
+  }, [subjectsOptions]);
 
   // Identify schedules that don't have an active session created yet for this date
   const existingScheduleIds = new Set(
@@ -59,6 +89,19 @@ export default function PortalGuruPage() {
     try {
       const result = await createOrGetMutation.mutateAsync({
         schedule_id: scheduleId,
+        date: activeDate,
+      });
+      router.push(`/portal-guru/${result.id}`);
+    } catch (err) {
+      console.error("Gagal memulai sesi presensi:", err);
+    }
+  };
+
+  const handleStartSessionFromAssignment = async (classId: string, subjectId: string) => {
+    try {
+      const result = await createOrGetMutation.mutateAsync({
+        class_id: classId,
+        subject_id: subjectId,
         date: activeDate,
       });
       router.push(`/portal-guru/${result.id}`);
@@ -307,46 +350,151 @@ export default function PortalGuruPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {uninitiatedSchedules.map((sched) => (
-                  <div
-                    key={sched.id}
-                    className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition space-y-3 flex flex-col justify-between"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#0c3960]/10 text-[#0c3960]">
-                          Jam: {sched.starts_at} - {sched.ends_at}
-                        </span>
-                        <span className="text-[11px] font-semibold text-slate-400">
-                          Sesi Belum Dibuat
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-800">
-                        Jadwal Kelas #{sched.class_id.slice(0, 8)}
-                      </h4>
-                      <p className="text-xs text-slate-500">
-                        Mata Pelajaran #{sched.subject_id.slice(0, 8)}
-                      </p>
-                    </div>
+                {uninitiatedSchedules.map((sched) => {
+                  const clsName =
+                    classMap[sched.class_id] || `Kelas #${sched.class_id.slice(0, 8)}`;
+                  const subName =
+                    subjectMap[sched.subject_id] ||
+                    `Mata Pelajaran #${sched.subject_id.slice(0, 8)}`;
 
-                    <button
-                      type="button"
-                      disabled={createOrGetMutation.isPending}
-                      onClick={() => handleStartSessionFromSchedule(sched.id)}
-                      className="w-full py-2 bg-[#0c3960] hover:bg-[#0a2e4e] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+                  return (
+                    <div
+                      key={sched.id}
+                      className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition space-y-3 flex flex-col justify-between"
                     >
-                      <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
-                      <span>
-                        {createOrGetMutation.isPending
-                          ? "Membuat Sesi..."
-                          : "Mulai Presensi Kelas"}
-                      </span>
-                    </button>
-                  </div>
-                ))}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#0c3960]/10 text-[#0c3960]">
+                            Jam: {sched.starts_at} - {sched.ends_at}
+                          </span>
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            Sesi Belum Dibuat
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-800">
+                          {clsName}
+                        </h4>
+                        <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                          <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{subName}</span>
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={createOrGetMutation.isPending}
+                        onClick={() => handleStartSessionFromSchedule(sched.id)}
+                        className="w-full py-2 bg-[#0c3960] hover:bg-[#0a2e4e] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
+                        <span>
+                          {createOrGetMutation.isPending
+                            ? "Membuat Sesi..."
+                            : "Mulai Presensi Kelas"}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
+
+          {/* =========================================================================
+              7. SECTION: PENUGASAN MENGAJAR (KELAS & MAPEL DIAMPU)
+          ========================================================================== */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-[#0c3960]" />
+                  <span>Kelas & Mata Pelajaran Diampu</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Daftar kelas dan mata pelajaran resmi yang ditugaskan kepada Anda pada tahun ajaran aktif.
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 self-start sm:self-auto">
+                {assignments.length} Penugasan Aktif
+              </span>
+            </div>
+
+            {isLoadingAssignments ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-pulse">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-32 bg-slate-100 rounded-2xl border border-slate-200"
+                  />
+                ))}
+              </div>
+            ) : assignments.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {assignments.map((assign) => {
+                  const clsName =
+                    classMap[assign.class_id] || `Kelas #${assign.class_id.slice(0, 8)}`;
+                  const subName =
+                    subjectMap[assign.subject_id] ||
+                    `Mapel #${assign.subject_id.slice(0, 8)}`;
+
+                  return (
+                    <div
+                      key={assign.id}
+                      className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#0c3960]/30 hover:shadow-xs transition space-y-3 flex flex-col justify-between"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Aktif
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                            <GraduationCap className="w-3.5 h-3.5" />
+                            Pengajar Resmi
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900">{clsName}</h4>
+                        <p className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{subName}</span>
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          disabled={createOrGetMutation.isPending}
+                          onClick={() =>
+                            handleStartSessionFromAssignment(
+                              assign.class_id,
+                              assign.subject_id
+                            )
+                          }
+                          className="w-full py-1.5 px-2 bg-[#0c3960] hover:bg-[#0a2e4e] text-white rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <PlusCircle className="w-3 h-3 text-amber-300" />
+                          <span>Presensi Hari Ini</span>
+                        </button>
+
+                        <Link
+                          href={`/kelas/${assign.class_id}?subject_id=${assign.subject_id}`}
+                          className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 text-center"
+                        >
+                          <span>Rekap Kelas</span>
+                          <ArrowRight className="w-3 h-3 text-slate-400" />
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                <p className="text-xs text-slate-500">
+                  Belum ada kelas atau mata pelajaran yang ditugaskan ke akun Anda.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Empty State when no sessions and no uninitiated schedules */}
           {sessions.length === 0 && uninitiatedSchedules.length === 0 && (
@@ -356,13 +504,12 @@ export default function PortalGuruPage() {
               </div>
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-800">
-                  Tidak Ada Sesi Presensi pada Tanggal Ini
+                  Tidak Ada Jadwal / Sesi Presensi Aktif Hari Ini
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
                   Belum ada sesi presensi yang tercatat untuk tanggal{" "}
                   <strong>{fullDisplayDate || activeDate}</strong>. Anda dapat
-                  memilih tanggal lain atau membuat sesi melalui jadwal yang
-                  tersedia.
+                  memilih tanggal lain atau membuat sesi langsung melalui kartu penugasan kelas di atas.
                 </p>
               </div>
             </div>

@@ -50,9 +50,9 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/teachers/{teacher_id}", h.Teacher.Delete)
 			}
 			if h.Class != nil {
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/classes", h.Class.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/classes", h.Class.List)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/classes", h.Class.Create)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/classes/{class_id}", h.Class.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/classes/{class_id}", h.Class.Get)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/classes/{class_id}", h.Class.Update)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/classes/{class_id}", h.Class.Delete)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/classes/{class_id}/students", h.Class.ListStudents)
@@ -60,12 +60,12 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/classes/{class_id}/students/{student_id}", h.Class.RemoveStudent)
 			}
 			if h.Assignments != nil {
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/teaching-assignments", h.Assignments.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/teaching-assignments", h.Assignments.List)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/teaching-assignments", h.Assignments.Create)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/teaching-assignments/{assignment_id}", h.Assignments.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/teaching-assignments/{assignment_id}", h.Assignments.Get)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/teaching-assignments/{assignment_id}", h.Assignments.Update)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/teaching-assignments/{assignment_id}", h.Assignments.Delete)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/teachers/{teacher_id}/assignments", h.Assignments.ListForTeacher)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/teachers/{teacher_id}/assignments", h.Assignments.ListForTeacher)
 			}
 			if h.Schedules != nil {
 				r.Get("/schedules/today", h.Schedules.Today)
@@ -85,16 +85,16 @@ func RegisterRoutes(r chi.Router, h Handlers, tokenMaker *token.Maker, redisClie
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/students/{student_id}/enrollments", h.Student.Transfer)
 			}
 			if h.Subject != nil {
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/subjects", h.Subject.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/subjects", h.Subject.List)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/subjects", h.Subject.Create)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/subjects/{id}", h.Subject.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/subjects/{id}", h.Subject.Get)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/subjects/{id}", h.Subject.Update)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/subjects/{id}", h.Subject.Delete)
 			}
 			if h.AcademicYear != nil {
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/academic-years", h.AcademicYear.List)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/academic-years", h.AcademicYear.List)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/academic-years", h.AcademicYear.Create)
-				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Get("/academic-years/{id}", h.AcademicYear.Get)
+				r.With(middleware.RequireRole(domain.RoleSuperAdmin, domain.RoleTeacher, domain.RoleHomeroomTeacher)).Get("/academic-years/{id}", h.AcademicYear.Get)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Patch("/academic-years/{id}", h.AcademicYear.Update)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Delete("/academic-years/{id}", h.AcademicYear.Delete)
 				r.With(middleware.RequireRole(domain.RoleSuperAdmin)).Post("/academic-years/{id}/activate", h.AcademicYear.Activate)
