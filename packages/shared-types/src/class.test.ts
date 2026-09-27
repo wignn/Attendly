@@ -5,8 +5,8 @@ import {
   ClassUpdateSchema,
   ClassStudentItemSchema,
   AddStudentToClassSchema,
-  AcademicYearRecordSchema,
 } from "./class";
+import { AcademicYearRecordSchema } from "./academic-year";
 
 describe("Class Types Validation", () => {
   it("should validate a valid class detail record", () => {
