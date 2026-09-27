@@ -56,3 +56,36 @@ export type TeachingAssignmentRecordDto = z.infer<
   typeof TeachingAssignmentRecordSchema
 >;
 
+export const TeachingAssignmentCreateSchema = z.object({
+  teacher_id: z.string().uuid({ message: "Guru wajib dipilih" }),
+  class_id: z.string().uuid({ message: "Kelas wajib dipilih" }),
+  subject_id: z.string().uuid({ message: "Mata pelajaran wajib dipilih" }),
+  academic_year_id: z.string().uuid({ message: "Tahun ajaran wajib dipilih" }),
+});
+export type TeachingAssignmentCreateDto = z.infer<
+  typeof TeachingAssignmentCreateSchema
+>;
+
+export const TeachingAssignmentUpdateSchema = z.object({
+  teacher_id: z.string().uuid().optional(),
+  class_id: z.string().uuid().optional(),
+  subject_id: z.string().uuid().optional(),
+  academic_year_id: z.string().uuid().optional(),
+});
+export type TeachingAssignmentUpdateDto = z.infer<
+  typeof TeachingAssignmentUpdateSchema
+>;
+
+export const TeachingAssignmentFilterSchema = z.object({
+  teacher_id: z.string().optional(),
+  class_id: z.string().optional(),
+  subject_id: z.string().optional(),
+  academic_year_id: z.string().optional(),
+  page: z.number().int().positive().optional(),
+  per_page: z.number().int().positive().optional(),
+});
+export type TeachingAssignmentFilterDto = z.infer<
+  typeof TeachingAssignmentFilterSchema
+>;
+
+

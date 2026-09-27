@@ -9,3 +9,4 @@ export * from "./student";
 export * from "./class";
 export * from "./subject";
 export * from "./academic-year";
+export * from "./schedule";
