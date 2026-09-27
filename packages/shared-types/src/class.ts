@@ -63,15 +63,3 @@ export const AddStudentToClassSchema = z.object({
   effective_date: z.string().optional(),
 });
 export type AddStudentToClassDto = z.infer<typeof AddStudentToClassSchema>;
-
-export const AcademicYearRecordSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  semester: z.number().int(),
-  starts_on: z.string(),
-  ends_on: z.string(),
-  active: z.boolean(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-export type AcademicYearRecordDto = z.infer<typeof AcademicYearRecordSchema>;
