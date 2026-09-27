@@ -5,3 +5,4 @@ export * from "./dashboard";
 export * from "./teacher";
 export * from "./homeroom";
 export * from "./attendance";
+export * from "./student";
