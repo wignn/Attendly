@@ -17,8 +17,14 @@ export default function DashboardLayout({
   const { currentUser, isAuthenticated, isLoading } = useAuthRole();
   const pathname = usePathname();
   const router = useRouter();
-  const teacherRoutes = ["/guru", "/kelas", "/mapel", "/tahun-ajaran", "/jadwal", "/audit", "/siswa"];
-  const requiresAdmin = teacherRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  // Class attendance report (/kelas/[classId]) is accessible to Teachers, Homeroom Teachers, and Super Admin.
+  // Root /kelas (class management CRUD) and other administrative routes require Super Admin.
+  const isClassReportRoute = pathname.startsWith("/kelas/") && pathname !== "/kelas";
+  const adminOnlyRoutes = ["/guru", "/mapel", "/tahun-ajaran", "/jadwal", "/audit", "/siswa"];
+  const requiresAdmin =
+    !isClassReportRoute &&
+    (pathname === "/kelas" ||
+      adminOnlyRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`)));
   const isSuperAdmin = currentUser.roles.includes("SUPER_ADMIN");
 
   React.useEffect(() => {

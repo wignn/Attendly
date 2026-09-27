@@ -55,7 +55,24 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
     }
 
     const sections = [];
-    if (currentUser.roles.includes("TEACHER")) {
+    const hasTeacher = currentUser.roles.includes("TEACHER");
+    const hasHomeroom = currentUser.roles.includes("HOMEROOM_TEACHER");
+
+    if (hasTeacher && hasHomeroom) {
+      sections.push({
+        heading: "TUGAS GURU MAPEL",
+        items: [
+          { href: "/portal-guru", label: "Jadwal Mengajar", icon: CalendarCheck },
+          { href: "/absensi", label: "Presensi Mengajar", icon: ClipboardCheck },
+        ],
+      });
+      sections.push({
+        heading: "TUGAS WALI KELAS",
+        items: [
+          { href: "/dashboard", label: "Rekap Kehadiran Rombel", icon: BarChart3 },
+        ],
+      });
+    } else if (hasTeacher) {
       sections.push({
         heading: "TUGAS GURU MAPEL",
         items: [
@@ -64,8 +81,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
           { href: "/dashboard", label: "Statistik Kehadiran", icon: BarChart3 },
         ],
       });
-    }
-    if (currentUser.roles.includes("HOMEROOM_TEACHER")) {
+    } else if (hasHomeroom) {
       sections.push({
         heading: "TUGAS WALI KELAS",
         items: [
