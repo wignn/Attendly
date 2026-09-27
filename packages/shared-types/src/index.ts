@@ -10,3 +10,4 @@ export * from "./class";
 export * from "./subject";
 export * from "./academic-year";
 export * from "./schedule";
+export * from "./audit-export";
