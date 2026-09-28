@@ -53,6 +53,24 @@ func (c *Client) Del(ctx context.Context, keys ...string) error {
 	return c.rdb.Del(ctx, keys...).Err()
 }
 
+func (c *Client) Incr(ctx context.Context, key string) (int64, error) {
+	if c == nil || c.rdb == nil {
+		return 0, fmt.Errorf("redis client is unavailable")
+	}
+	return c.rdb.Incr(ctx, key).Result()
+}
+
+func (c *Client) Version(ctx context.Context, key string) (int64, error) {
+	if c == nil || c.rdb == nil {
+		return 0, fmt.Errorf("redis client is unavailable")
+	}
+	value, err := c.rdb.Get(ctx, key).Int64()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	return value, err
+}
+
 // Allow implements a fixed-window rate limiter. Returns true if request is allowed.
 func (c *Client) Allow(ctx context.Context, key string, limit int64, window time.Duration) (bool, error) {
 	if c == nil || c.rdb == nil {
