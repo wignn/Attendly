@@ -18,8 +18,8 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@10.5.2 --activate
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages ./packages
+COPY --from=deps /app ./
+
 COPY . .
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
