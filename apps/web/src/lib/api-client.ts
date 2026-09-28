@@ -99,7 +99,7 @@ export async function fetchApi<T>(
       ...options,
       headers,
     });
-  } catch (err: any) {
+  } catch {
     throw new ApiError(
       "NETWORK_ERROR",
       "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL
@@ -167,7 +167,7 @@ export async function fetchPaginatedApi<T>(
       ...options,
       headers,
     });
-  } catch (err: any) {
+  } catch {
     throw new ApiError(
       "NETWORK_ERROR",
       "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL
@@ -179,11 +179,8 @@ export async function fetchPaginatedApi<T>(
     if (refreshedToken) {
       headers.set("Authorization", `Bearer ${refreshedToken}`);
       try {
-        res = await fetch(url, {
-          ...options,
-          headers,
-        });
-      } catch (err: any) {
+        res = await fetch(url, { ...options, headers });
+      } catch {
         throw new ApiError(
           "NETWORK_ERROR",
           "Tidak dapat terhubung ke server backend. Pastikan server aktif di " + API_BASE_URL

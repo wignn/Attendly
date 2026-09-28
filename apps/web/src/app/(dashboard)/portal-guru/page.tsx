@@ -7,7 +7,7 @@ import { useAuthRole } from "@/context/auth-role-context";
 import { useAttendanceDate } from "@/context/attendance-date-context";
 import {
   useAttendanceSessions,
-  useTodaySchedules,
+  useSchedulesForDate,
   useCreateOrGetSession,
   useClassesOptions,
   useSubjectsOptions,
@@ -44,7 +44,10 @@ export default function PortalGuruPage() {
   const {
     data: schedulesData,
     isLoading: isLoadingSchedules,
-  } = useTodaySchedules();
+    isError: isErrorSchedules,
+    error: schedulesError,
+    refetch: refetchSchedules,
+  } = useSchedulesForDate(activeDate);
 
   const { data: classesOptions = [] } = useClassesOptions();
   const { data: subjectsOptions = [] } = useSubjectsOptions();
@@ -55,9 +58,10 @@ export default function PortalGuruPage() {
   } = useTeacherAssignments();
 
   const createOrGetMutation = useCreateOrGetSession();
+  const [sessionStartError, setSessionStartError] = React.useState<string | null>(null);
 
   const sessions = sessionsData?.data || [];
-  const todaySchedules = schedulesData?.data || [];
+  const dateSchedules = schedulesData?.data || [];
   const assignments = assignmentsData?.data || [];
 
   const classMap = React.useMemo(() => {
@@ -81,11 +85,12 @@ export default function PortalGuruPage() {
     sessions.map((s) => s.schedule_id).filter(Boolean)
   );
 
-  const uninitiatedSchedules = todaySchedules.filter(
+  const uninitiatedSchedules = dateSchedules.filter(
     (sched) => !existingScheduleIds.has(sched.id)
   );
 
   const handleStartSessionFromSchedule = async (scheduleId: string) => {
+    setSessionStartError(null);
     try {
       const result = await createOrGetMutation.mutateAsync({
         schedule_id: scheduleId,
@@ -93,11 +98,12 @@ export default function PortalGuruPage() {
       });
       router.push(`/portal-guru/${result.id}`);
     } catch (err) {
-      console.error("Gagal memulai sesi presensi:", err);
+      setSessionStartError(err instanceof Error ? err.message : "Gagal memulai sesi presensi. Coba lagi.");
     }
   };
 
   const handleStartSessionFromAssignment = async (classId: string, subjectId: string) => {
+    setSessionStartError(null);
     try {
       const result = await createOrGetMutation.mutateAsync({
         class_id: classId,
@@ -106,12 +112,25 @@ export default function PortalGuruPage() {
       });
       router.push(`/portal-guru/${result.id}`);
     } catch (err) {
-      console.error("Gagal memulai sesi presensi:", err);
+      setSessionStartError(err instanceof Error ? err.message : "Gagal memulai sesi presensi. Coba lagi.");
     }
   };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto py-2">
+      {sessionStartError && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="flex-1">Gagal memulai sesi presensi: {sessionStartError}</div>
+          <button type="button" onClick={() => setSessionStartError(null)} aria-label="Tutup pesan error" className="font-bold">×</button>
+        </div>
+      )}
+      {isErrorSchedules && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          <span>Gagal memuat jadwal untuk tanggal ini: {schedulesError instanceof Error ? schedulesError.message : "Terjadi kesalahan."}</span>
+          <button type="button" onClick={() => refetchSchedules()} className="font-bold underline">Coba lagi</button>
+        </div>
+      )}
       {/* =========================================================================
           1. HEADER CARD
       ========================================================================== */}

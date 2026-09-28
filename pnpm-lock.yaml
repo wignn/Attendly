@@ -89,6 +89,9 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.0.6
+        version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)(jsdom@26.1.0)
 
   packages/eslint-config:
     dependencies:

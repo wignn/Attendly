@@ -74,6 +74,19 @@ export function useAttendanceSession(id: string | null) {
   });
 }
 
+export function useSchedulesForDate(date: string, page: number = 1, perPage: number = 50) {
+  return useQuery({
+    queryKey: ["schedules", "on-date", date, { page, perPage }],
+    enabled: Boolean(date),
+    queryFn: async (): Promise<PaginatedResult<ScheduleItemDto[]>> => {
+      const params = new URLSearchParams({ on_date: date, active: "true", page: String(page), per_page: String(perPage) });
+      return fetchPaginatedApi<ScheduleItemDto[]>(`/api/v1/schedules?${params.toString()}`);
+    },
+    staleTime: 1000 * 30,
+    retry: 1,
+  });
+}
+
 export function useTodaySchedules(page: number = 1, perPage: number = 50) {
   return useQuery({
     queryKey: ["schedules", "today", { page, perPage }],

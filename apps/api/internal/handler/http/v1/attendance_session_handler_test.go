@@ -66,6 +66,23 @@ func (m *mockAttendanceRepoForHandler) Reopen(_ context.Context, _ uuid.UUID, _ 
 	return m.session, nil
 }
 
+func TestSubmitRejectsMalformedJSON(t *testing.T) {
+	teacherID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	sessID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	repo := &mockAttendanceRepoForHandler{session: &domain.AttendanceSessionDetail{ID: sessID, TeacherID: teacherID, Status: domain.SessionStatusDraft, Version: 1}}
+	handler := NewAttendanceSessionHandler(service.NewAttendanceSessionService(repo))
+	req := httptest.NewRequest(http.MethodPost, "/attendance-sessions/"+sessID.String()+"/submit", bytes.NewBufferString("{"))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sessID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.AuthenticatedUserContextKey, &domain.User{ID: teacherID, IsActive: true, Roles: []domain.Role{domain.RoleTeacher}}))
+	rec := httptest.NewRecorder()
+	handler.Submit(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected malformed JSON to return 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAttendanceSessionHandlerHTTP(t *testing.T) {
 	teacherID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	sessID := uuid.MustParse("00000000-0000-0000-0000-000000000010")

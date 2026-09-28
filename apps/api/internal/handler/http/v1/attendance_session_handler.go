@@ -159,7 +159,10 @@ func (h *AttendanceSessionHandler) Submit(w http.ResponseWriter, r *http.Request
 	}
 
 	var in domain.SubmitSessionInput
-	_ = decodeAttendanceJSON(r, &in)
+	if err := decodeAttendanceJSON(r, &in); err != nil {
+		response.Error(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid request body", nil)
+		return
+	}
 
 	user := middleware.GetAuthenticatedUser(r.Context())
 	sess, err := h.service.Submit(r.Context(), user, id, in)

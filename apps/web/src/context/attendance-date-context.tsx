@@ -20,6 +20,8 @@ const MONTH_NAMES = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 ];
 
+import { getTodayJakartaDate } from "@/lib/attendance-date";
+
 function getDayName(isoDate: string): string {
   const d = new Date(isoDate + "T00:00:00");
   return DAY_NAMES[d.getDay()] || "Hari";
@@ -37,8 +39,7 @@ function formatIndoDate(isoDate: string): string {
 }
 
 export function AttendanceDateProvider({ children }: { children: React.ReactNode }) {
-  // Default tanggal awal sesuai prototipe
-  const [activeDate, setActiveDate] = React.useState<string>("2026-09-23");
+  const [activeDate, setActiveDate] = React.useState<string>(getTodayJakartaDate);
 
   const activeDayName = React.useMemo(() => getDayName(activeDate).toUpperCase(), [activeDate]);
   const formattedDisplayDate = React.useMemo(() => formatIndoDate(activeDate), [activeDate]);
@@ -58,7 +59,7 @@ export function AttendanceDateProvider({ children }: { children: React.ReactNode
   }, []);
 
   const resetDateToToday = React.useCallback(() => {
-    setActiveDate("2026-09-23");
+    setActiveDate(getTodayJakartaDate());
   }, []);
 
   return (
