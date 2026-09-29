@@ -149,7 +149,7 @@ export default function SiswaPage() {
   const handleOpenEdit = (student: StudentRecordDto) => {
     setEditingStudent(student);
     setFormName(student.full_name);
-    setFormNis(student.nis);
+    setFormNis(student.nis ?? "");
     setFormNisn(student.nisn || "");
     setFormStatus(student.status);
     setModalError(null);
@@ -195,15 +195,15 @@ export default function SiswaPage() {
     const trimmedNis = formNis.trim();
     const trimmedNisn = formNisn.trim();
 
-    if (!trimmedName || !trimmedNis || !formClassId) {
-      setModalError("Nama lengkap, NIS, dan Kelas wajib diisi.");
+    if (!trimmedName || !formClassId) {
+      setModalError("Nama lengkap dan kelas wajib diisi.");
       return;
     }
 
     try {
       await createMutation.mutateAsync({
         full_name: trimmedName,
-        nis: trimmedNis,
+        nis: trimmedNis || null,
         nisn: trimmedNisn || undefined,
         class_id: formClassId,
         effective_on: formEffectiveOn || undefined,
@@ -225,8 +225,8 @@ export default function SiswaPage() {
     const trimmedNis = formNis.trim();
     const trimmedNisn = formNisn.trim();
 
-    if (!trimmedName || !trimmedNis) {
-      setModalError("Nama lengkap dan NIS wajib diisi.");
+    if (!trimmedName) {
+      setModalError("Nama lengkap wajib diisi.");
       return;
     }
 
@@ -235,7 +235,7 @@ export default function SiswaPage() {
         id: editingStudent.id,
         data: {
           full_name: trimmedName,
-          nis: trimmedNis,
+          nis: trimmedNis || undefined,
           nisn: trimmedNisn || undefined,
           status: formStatus,
         },
@@ -794,11 +794,10 @@ export default function SiswaPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    NIS <span className="text-rose-500">*</span>
+                    NIS (Opsional)
                   </label>
                   <input
                     type="text"
-                    required
                     placeholder="Contoh: 20260701"
                     value={formNis}
                     onChange={(e) => setFormNis(e.target.value)}
@@ -922,11 +921,10 @@ export default function SiswaPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    NIS <span className="text-rose-500">*</span>
+                    NIS (Opsional)
                   </label>
                   <input
                     type="text"
-                    required
                     value={formNis}
                     onChange={(e) => setFormNis(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960]"

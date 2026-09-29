@@ -5,7 +5,7 @@ export type StudentStatus = z.infer<typeof StudentStatusEnum>;
 
 export const StudentRecordSchema = z.object({
   id: z.string().uuid(),
-  nis: z.string(),
+  nis: z.string().nullable(),
   nisn: z.string().nullable().optional(),
   full_name: z.string(),
   class_id: z.string().uuid(),
@@ -18,7 +18,7 @@ export const StudentRecordSchema = z.object({
 export type StudentRecordDto = z.infer<typeof StudentRecordSchema>;
 
 export const StudentCreateSchema = z.object({
-  nis: z.string().min(1, { message: "NIS wajib diisi" }),
+  nis: z.string().trim().max(50).nullable().optional(),
   nisn: z.string().nullable().optional(),
   full_name: z.string().min(1, { message: "Nama lengkap wajib diisi" }),
   class_id: z.string().uuid({ message: "Kelas wajib dipilih" }),

@@ -272,7 +272,7 @@ func (r *ClassRepo) ListStudents(ctx context.Context, classID uuid.UUID, page, p
 		offset = 0
 	}
 
-	selectQuery := `SELECT st.id, st.student_number, st.nisn, st.full_name, st.active,
+	selectQuery := `SELECT st.id, COALESCE(st.student_number,''), st.nisn, st.full_name, st.active,
 		COALESCE(se.valid_from, st.created_at::date) as valid_from, st.created_at
 		FROM students st
 		LEFT JOIN student_enrollments se ON se.student_id = st.id AND se.class_id = st.class_id AND se.valid_to IS NULL

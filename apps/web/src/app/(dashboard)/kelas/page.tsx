@@ -920,7 +920,7 @@ function ClassStudentsRosterModal({
     return students.filter(
       (s) =>
         s.full_name.toLowerCase().includes(q) ||
-        s.nis.toLowerCase().includes(q) ||
+        (s.nis ?? "").toLowerCase().includes(q) ||
         (s.nisn && s.nisn.toLowerCase().includes(q))
     );
   }, [students, searchRoster]);

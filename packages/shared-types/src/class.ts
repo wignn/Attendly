@@ -49,7 +49,7 @@ export type ClassFilterDto = z.infer<typeof ClassFilterSchema>;
 
 export const ClassStudentItemSchema = z.object({
   student_id: z.string().uuid(),
-  nis: z.string(),
+  nis: z.string().nullable(),
   nisn: z.string().nullable().optional(),
   full_name: z.string(),
   active: z.boolean(),

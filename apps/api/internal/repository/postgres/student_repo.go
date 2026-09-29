@@ -18,7 +18,7 @@ type StudentRepo struct{ pool *pgxpool.Pool }
 
 func NewStudentRepo(pool *pgxpool.Pool) domain.StudentRepository { return &StudentRepo{pool: pool} }
 
-const studentColumns = `s.id,s.student_number,s.nisn,s.full_name,s.class_id,c.name,s.active,s.deleted_at,s.created_at,s.updated_at`
+const studentColumns = `s.id,COALESCE(s.student_number,''),s.nisn,s.full_name,s.class_id,c.name,s.active,s.deleted_at,s.created_at,s.updated_at`
 const studentFrom = ` FROM students s JOIN classes c ON c.id=s.class_id `
 
 func scanStudent(row interface{ Scan(...any) error }) (domain.StudentRecord, error) {
@@ -114,7 +114,7 @@ func (r *StudentRepo) Create(ctx context.Context, student domain.StudentRecord, 
 	if student.ID == uuid.Nil {
 		student.ID = uuid.New()
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO students (id,student_number,nisn,full_name,class_id,active) VALUES ($1,$2,$3,$4,$5,$6) RETURNING created_at,updated_at`, student.ID, student.NIS, student.NISN, student.FullName, student.CurrentClassID, student.Active).Scan(&student.CreatedAt, &student.UpdatedAt)
+	err = tx.QueryRow(ctx, `INSERT INTO students (id,student_number,nisn,full_name,class_id,active) VALUES ($1,NULLIF($2,''),$3,$4,$5,$6) RETURNING created_at,updated_at`, student.ID, student.NIS, student.NISN, student.FullName, student.CurrentClassID, student.Active).Scan(&student.CreatedAt, &student.UpdatedAt)
 	if err != nil {
 		return domain.StudentRecord{}, mapStudentWriteError(err)
 	}
