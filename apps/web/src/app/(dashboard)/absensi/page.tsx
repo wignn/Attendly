@@ -28,6 +28,7 @@ import { useTeachers } from "@/hooks/use-teachers";
 import { useSubjects } from "@/hooks/use-subjects";
 import {
   useAttendanceSessions,
+  useAttendanceSession,
   useUpdateAttendanceRecords,
 } from "@/hooks/use-attendance-sessions";
 import { ClassDetailDto, AttendanceSessionDetailDto, AttendanceStatus } from "@komas/shared-types";
@@ -53,6 +54,11 @@ export interface ClassSessionItem {
   jam: string;
   status: "Selesai Diabsen" | "Sedang Berlangsung" | "Belum Diabsen";
   submitTime: string;
+  presentCount?: number;
+  excusedCount?: number;
+  sickCount?: number;
+  absentCount?: number;
+  totalStudents?: number;
   students: StudentRowItem[];
 }
 
@@ -159,6 +165,8 @@ export default function ManajemenAbsensiPage() {
       const classInfo = displayClasses.find((item) => item.id === session.class_id);
       if (!classInfo) continue;
 
+      const records = session.records ?? [];
+
       updated[normalizeKey(classInfo.code)] = {
         id: session.id,
         classId: classInfo.id,
@@ -170,7 +178,12 @@ export default function ManajemenAbsensiPage() {
         jam: new Date(session.held_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
         status: session.status === "SUBMITTED" ? "Selesai Diabsen" : "Sedang Berlangsung",
         submitTime: session.submitted_at ? new Date(session.submitted_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
-        students: session.records.map((record) => ({
+        presentCount: session.present_count,
+        excusedCount: session.excused_count,
+        sickCount: session.sick_count,
+        absentCount: session.absent_count,
+        totalStudents: session.total_students,
+        students: records.map((record) => ({
           id: record.student_id,
           name: record.student_name,
           nis: record.student_nis || "",
@@ -179,13 +192,53 @@ export default function ManajemenAbsensiPage() {
       };
     }
 
-    setAttendanceSessions((previous) =>
-      JSON.stringify(previous) === JSON.stringify(updated) ? previous : updated
-    );
+    setAttendanceSessions((previous) => {
+      const next: Record<string, ClassSessionItem> = { ...previous };
+      for (const [key, val] of Object.entries(updated)) {
+        if (!next[key]) {
+          next[key] = val;
+        } else {
+          next[key] = {
+            ...val,
+            students: next[key].students.length > 0 ? next[key].students : val.students,
+          };
+        }
+      }
+      return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+    });
   }, [backendSessions, displayClasses]);
 
   // Current session in Tier 3
   const currentSession = attendanceSessions[selectedClassId];
+
+  // Fetch detailed attendance session (which includes records) when in Tier 3
+  const { data: sessionDetail, isLoading: isLoadingSessionDetail } = useAttendanceSession(
+    currentTier === 3 && currentSession ? currentSession.id : null
+  );
+
+  React.useEffect(() => {
+    if (sessionDetail?.records && sessionDetail.records.length > 0 && selectedClassId) {
+      const detailStudents: StudentRowItem[] = sessionDetail.records.map((record) => ({
+        id: record.student_id,
+        name: record.student_name,
+        nis: record.student_nis || "",
+        status: statusToFrontend(record.status),
+      }));
+
+      setAttendanceSessions((prev) => {
+        const existing = prev[selectedClassId];
+        if (!existing) return prev;
+        if (existing.students.length === detailStudents.length) return prev;
+        return {
+          ...prev,
+          [selectedClassId]: {
+            ...existing,
+            students: detailStudents,
+          },
+        };
+      });
+    }
+  }, [sessionDetail, selectedClassId]);
 
   // Navigation Handlers
   const handleOpenTingkat = (tingkat: string) => {
@@ -259,6 +312,15 @@ export default function ManajemenAbsensiPage() {
   // Calculate live counters for Tier 3
   const counters = React.useMemo(() => {
     if (!currentSession) return { hadir: 0, izin: 0, sakit: 0, alpa: 0, total: 0 };
+    if (!currentSession.students || currentSession.students.length === 0) {
+      return {
+        hadir: currentSession.presentCount ?? 0,
+        izin: currentSession.excusedCount ?? 0,
+        sakit: currentSession.sickCount ?? 0,
+        alpa: currentSession.absentCount ?? 0,
+        total: currentSession.totalStudents ?? 0,
+      };
+    }
     let hadir = 0,
       izin = 0,
       sakit = 0,
@@ -410,16 +472,18 @@ export default function ManajemenAbsensiPage() {
               const session = attendanceSessions[key];
               if (!session) return null;
 
-              let h = 0,
-                i = 0,
-                s = 0,
-                a = 0;
-              (session.students || []).forEach((st) => {
-                if (st.status === "Hadir") h++;
-                else if (st.status === "Izin") i++;
-                else if (st.status === "Sakit") s++;
-                else if (st.status === "Alpa") a++;
-              });
+              const h =
+                session.presentCount ??
+                (session.students || []).filter((st) => st.status === "Hadir").length;
+              const i =
+                session.excusedCount ??
+                (session.students || []).filter((st) => st.status === "Izin").length;
+              const s =
+                session.sickCount ??
+                (session.students || []).filter((st) => st.status === "Sakit").length;
+              const a =
+                session.absentCount ??
+                (session.students || []).filter((st) => st.status === "Alpa").length;
 
               return (
                 <div
@@ -562,55 +626,70 @@ export default function ManajemenAbsensiPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
-                  {currentSession.students.map((st, idx) => (
-                    <tr key={st.id} className="hover:bg-slate-50/70 transition">
-                      <td className="px-6 py-4 text-center font-bold text-slate-400 text-xs">
-                        {idx + 1}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">{st.name}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{st.nis}</div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="inline-flex items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100 rounded-full border border-slate-200">
-                          {(["Hadir", "Izin", "Sakit", "Alpa"] as StudentAttendanceStatus[]).map(
-                            (opt) => {
-                              const isActive = st.status === opt;
-                              return (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  onClick={() => handleSetStudentStatus(st.id, opt)}
-                                  className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
-                                    isActive
-                                      ? "bg-slate-900 text-white shadow-xs"
-                                      : "text-slate-600 hover:text-slate-900"
-                                  }`}
-                                >
-                                  {opt}
-                                </button>
-                              );
-                            }
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            st.status === "Hadir"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : st.status === "Izin"
-                              ? "bg-blue-100 text-blue-800"
-                              : st.status === "Sakit"
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-rose-100 text-rose-800"
-                          }`}
-                        >
-                          {st.status}
-                        </span>
+                  {isLoadingSessionDetail && (!currentSession.students || currentSession.students.length === 0) ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto text-[#0c3960] mb-2" />
+                        <span>Memuat data siswa dan catatan kehadiran...</span>
                       </td>
                     </tr>
-                  ))}
+                  ) : currentSession.students && currentSession.students.length > 0 ? (
+                    currentSession.students.map((st, idx) => (
+                      <tr key={st.id} className="hover:bg-slate-50/70 transition">
+                        <td className="px-6 py-4 text-center font-bold text-slate-400 text-xs">
+                          {idx + 1}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-900">{st.name}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{st.nis}</div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="inline-flex items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100 rounded-full border border-slate-200">
+                            {(["Hadir", "Izin", "Sakit", "Alpa"] as StudentAttendanceStatus[]).map(
+                              (opt) => {
+                                const isActive = st.status === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => handleSetStudentStatus(st.id, opt)}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                                      isActive
+                                        ? "bg-slate-900 text-white shadow-xs"
+                                        : "text-slate-600 hover:text-slate-900"
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              }
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              st.status === "Hadir"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : st.status === "Izin"
+                                ? "bg-blue-100 text-blue-800"
+                                : st.status === "Sakit"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}
+                          >
+                            {st.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                        Belum ada catatan presensi siswa untuk sesi kelas ini.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
