@@ -3,14 +3,12 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
 
-# Support both repository-root and apps/api Docker build contexts.
 COPY apps/api/go.mod apps/api/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 COPY apps/api/ ./
 
-# Build static binaries with stripped symbols for a smaller runtime image.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server && \
@@ -32,5 +30,4 @@ USER app:app
 
 EXPOSE 8080
 
-# Apply database migrations, then replace the shell with the API process.
 CMD ["/bin/sh", "-c", "/app/migrate up || echo '[komas-api] Notice: migration failed or already current'; exec /app/server"]
