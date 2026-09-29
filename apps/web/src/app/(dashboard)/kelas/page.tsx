@@ -26,6 +26,7 @@ import {
 import { useTeachers } from "@/hooks/use-teachers";
 import { useSubjects } from "@/hooks/use-subjects";
 import { useAcademicYears } from "@/hooks/use-academic-years";
+import { useTeachingAssignments } from "@/hooks/use-schedules";
 import { ClassDetailDto } from "@komas/shared-types";
 
 export interface ClassItemData {
@@ -63,29 +64,7 @@ function normalizeKey(str: string): string {
   return str.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-// Default standard classes data matching reference
-const DEFAULT_CLASSES: ClassItemData[] = [
-  { id: "7a", code: "7A", name: "Kelas 7A", tingkat: "7", wali: "Budi Santoso, M.Pd.", totalSiswa: 32, percentage: 96 },
-  { id: "7b", code: "7B", name: "Kelas 7B", tingkat: "7", wali: "Siti Rahmawati, S.Pd.", totalSiswa: 32, percentage: 94 },
-  { id: "7c", code: "7C", name: "Kelas 7C", tingkat: "7", wali: "Ahmad Fauzi, S.Pd.", totalSiswa: 30, percentage: 98 },
-  { id: "7d", code: "7D", name: "Kelas 7D", tingkat: "7", wali: "Rina Marlina, S.Si.", totalSiswa: 31, percentage: 95 },
-  { id: "7e", code: "7E", name: "Kelas 7E", tingkat: "7", wali: "Dedi Kurniawan, S.Pd.", totalSiswa: 32, percentage: 92 },
-  { id: "7f", code: "7F", name: "Kelas 7F", tingkat: "7", wali: "Agus Salim, M.Pd.", totalSiswa: 30, percentage: 97 },
 
-  { id: "8a", code: "8A", name: "Kelas 8A", tingkat: "8", wali: "Eko Prasetyo, S.Kom.", totalSiswa: 32, percentage: 95 },
-  { id: "8b", code: "8B", name: "Kelas 8B", tingkat: "8", wali: "Nurul Hidayah, M.Pd.", totalSiswa: 31, percentage: 96 },
-  { id: "8c", code: "8C", name: "Kelas 8C", tingkat: "8", wali: "Sri Wahyuningsih, S.Pd.", totalSiswa: 32, percentage: 93 },
-  { id: "8d", code: "8D", name: "Kelas 8D", tingkat: "8", wali: "Ade Chandra, S.Sn.", totalSiswa: 30, percentage: 98 },
-  { id: "8e", code: "8E", name: "Kelas 8E", tingkat: "8", wali: "Drs. H. Mulyadi", totalSiswa: 32, percentage: 97 },
-  { id: "8f", code: "8F", name: "Kelas 8F", tingkat: "8", wali: "Ratna Sari Dewi, S.Pd.", totalSiswa: 31, percentage: 94 },
-
-  { id: "9a", code: "9A", name: "Kelas 9A", tingkat: "9", wali: "Hendra Wijaya, S.Pd.", totalSiswa: 32, percentage: 97 },
-  { id: "9b", code: "9B", name: "Kelas 9B", tingkat: "9", wali: "Tri Cahyono, M.Pd.", totalSiswa: 32, percentage: 95 },
-  { id: "9c", code: "9C", name: "Kelas 9C", tingkat: "9", wali: "Fitri Handayani, S.Pd.", totalSiswa: 31, percentage: 98 },
-  { id: "9d", code: "9D", name: "Kelas 9D", tingkat: "9", wali: "Rizky Pratama, S.Pd.", totalSiswa: 30, percentage: 96 },
-  { id: "9e", code: "9E", name: "Kelas 9E", tingkat: "9", wali: "Dewi Lestari, S.Pd.", totalSiswa: 32, percentage: 94 },
-  { id: "9f", code: "9F", name: "Kelas 9F", tingkat: "9", wali: "Ahmad Dahlan, S.Pd.", totalSiswa: 31, percentage: 99 },
-];
 
 export default function ManajemenKelasPage() {
   // Navigation Tiers: 1 = Pilih Jenjang (7, 8, 9), 2 = List Rombel (Bar Hijau), 3 = Detail Mapel Kelas
@@ -128,81 +107,27 @@ export default function ManajemenKelasPage() {
   const updateClassMutation = useUpdateClass();
   const deleteClassMutation = useDeleteClass();
 
-  // Local storage for classes list
-  const [classesList, setClassesList] = React.useState<ClassItemData[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("attendly_classes_list_v2");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {
-        console.error("Failed to parse classes from storage", e);
-      }
-    }
-    return DEFAULT_CLASSES;
-  });
+  // Classes are sourced exclusively from the API; never merge stale local/demo records.
+  const classesList: ClassItemData[] = React.useMemo(
+    () => backendClasses.map((bc) => ({
+      id: bc.id,
+      code: bc.code,
+      name: bc.name,
+      tingkat: normalizeGrade(bc.grade || bc.code),
+      wali: bc.homeroom_teacher_name || "Belum Ditentukan",
+      totalSiswa: bc.total_students ?? 0,
+      percentage: 0,
+    })),
+    [backendClasses]
+  );
 
-  const saveClassesList = (data: ClassItemData[]) => {
-    setClassesList(data);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("attendly_classes_list_v2", JSON.stringify(data));
-    }
-  };
+  const refreshClasses = () => refetchClasses();
 
-  // Merge / Sync backend classes into classesList when backend data loads
   React.useEffect(() => {
-    if (backendClasses.length > 0) {
-      setClassesList((prev) => {
-        const updated = [...prev];
-        let hasChanges = false;
-
-        backendClasses.forEach((bc) => {
-          const idx = updated.findIndex(
-            (c) => c.id === bc.id || normalizeKey(c.code) === normalizeKey(bc.code)
-          );
-
-          const tingkat = normalizeGrade(bc.grade || bc.code);
-          const waliName = bc.homeroom_teacher_name || "Belum Ditentukan";
-          const count = bc.total_students || 32;
-
-          if (idx >= 0) {
-            // Update existing
-            if (updated[idx].wali !== waliName || updated[idx].name !== bc.name) {
-              updated[idx] = {
-                ...updated[idx],
-                id: bc.id,
-                name: bc.name,
-                code: bc.code,
-                tingkat,
-                wali: waliName,
-                totalSiswa: count,
-              };
-              hasChanges = true;
-            }
-          } else {
-            // Append new from backend
-            hasChanges = true;
-            updated.push({
-              id: bc.id,
-              code: bc.code,
-              name: bc.name,
-              tingkat,
-              wali: waliName,
-              totalSiswa: count,
-              percentage: 95,
-            });
-          }
-        });
-
-        if (hasChanges) {
-          saveClassesList(updated);
-        }
-        return updated;
-      });
+    if (!selectedClassId && classesList.length > 0) {
+      setSelectedClassId(classesList[0].id);
     }
-  }, [backendClasses]);
+  }, [classesList, selectedClassId]);
 
   // Group classes by tingkat
   const classesByTingkat = React.useMemo(() => {
@@ -227,103 +152,29 @@ export default function ManajemenKelasPage() {
     );
   }, [selectedClassId, classesList]);
 
-  // Subjects list for selected class (Tier 3)
-  const classSubjects = React.useMemo<ClassSubjectItem[]>(() => {
-    if (!selectedClass) return [];
+  const { data: assignmentsData } = useTeachingAssignments({
+    class_id: selectedClass?.id,
+    academic_year_id: activeYear?.id,
+    per_page: 100,
+  });
 
-    const defaultWali = selectedClass.wali;
-
-    if (subjects.length > 0) {
-      return subjects.map((sub, idx) => ({
-        id: sub.id,
-        name: sub.name,
-        teacher: idx === 0 ? defaultWali : teachers[idx % teachers.length]?.full_name || defaultWali,
-        hours: "4 Jam / Pekan",
-        schedule:
-          idx % 2 === 0
-            ? "Senin & Rabu (07.40 - 09.00)"
-            : "Selasa & Kamis (09.15 - 10.45)",
-        avg: `${Math.max(90, selectedClass.percentage - (idx % 4))}%`,
+  // Display only actual class-teacher-subject assignments from the backend.
+  const classSubjects: ClassSubjectItem[] = (assignmentsData?.data ?? [])
+    .filter((assignment) => assignment.active)
+    .flatMap((assignment) => {
+      const subject = subjects.find((item) => item.id === assignment.subject_id);
+      if (!subject) return [];
+      const teacher = teachers.find((item) => item.id === assignment.teacher_id);
+      return [{
+        id: assignment.id,
+        name: subject.name,
+        teacher: teacher?.full_name || "Guru belum terhubung",
+        hours: "—",
+        schedule: "—",
+        avg: "—",
         status: "Aktif",
-      }));
-    }
-
-    // Default reference subjects
-    return [
-      {
-        id: 1,
-        name: "Bahasa Indonesia",
-        teacher: defaultWali,
-        hours: "4 Jam / Pekan",
-        schedule: "Senin & Rabu (07.40 - 09.00)",
-        avg: `${selectedClass.percentage}%`,
-        status: "Aktif",
-      },
-      {
-        id: 2,
-        name: "Matematika",
-        teacher: "Budi Santoso, M.Pd.",
-        hours: "5 Jam / Pekan",
-        schedule: "Selasa & Kamis (09.15 - 10.45)",
-        avg: "94%",
-        status: "Aktif",
-      },
-      {
-        id: 3,
-        name: "Ilmu Pengetahuan Alam (IPA)",
-        teacher: "Rina Marlina, S.Si.",
-        hours: "4 Jam / Pekan",
-        schedule: "Rabu & Jumat (10.00 - 11.20)",
-        avg: "95%",
-        status: "Aktif",
-      },
-      {
-        id: 4,
-        name: "Bahasa Inggris",
-        teacher: "Ahmad Fauzi, S.Pd.",
-        hours: "4 Jam / Pekan",
-        schedule: "Senin & Kamis (11.00 - 12.20)",
-        avg: "97%",
-        status: "Aktif",
-      },
-      {
-        id: 5,
-        name: "Pendidikan Agama Islam",
-        teacher: "Drs. H. Mulyadi",
-        hours: "3 Jam / Pekan",
-        schedule: "Senin & Jumat (12.00 - 13.20)",
-        avg: "98%",
-        status: "Aktif",
-      },
-      {
-        id: 6,
-        name: "Pendidikan Jasmani (PJOK)",
-        teacher: "Dedi Kurniawan, S.Pd.",
-        hours: "3 Jam / Pekan",
-        schedule: "Selasa (08.20 - 09.40)",
-        avg: "96%",
-        status: "Aktif",
-      },
-      {
-        id: 7,
-        name: "Ilmu Pengetahuan Sosial (IPS)",
-        teacher: "Agus Salim, M.Pd.",
-        hours: "4 Jam / Pekan",
-        schedule: "Selasa & Kamis (10.00 - 11.20)",
-        avg: "95%",
-        status: "Aktif",
-      },
-      {
-        id: 8,
-        name: "Informatika",
-        teacher: "Eko Prasetyo, S.Kom.",
-        hours: "3 Jam / Pekan",
-        schedule: "Selasa & Jumat (10.00 - 11.20)",
-        avg: "97%",
-        status: "Aktif",
-      },
-    ];
-  }, [selectedClass, subjects, teachers]);
+      }];
+    });
 
   // Navigation Handlers
   const handleOpenTingkat = (tingkat: string) => {
@@ -376,18 +227,14 @@ export default function ManajemenKelasPage() {
       return;
     }
 
-    // Try backend delete
-    if (c.id && !c.id.startsWith("mock-") && c.id.length > 10) {
-      try {
-        await deleteClassMutation.mutateAsync(c.id);
-      } catch (err) {
-        console.warn("Backend class delete note:", err);
-      }
+    try {
+      await deleteClassMutation.mutateAsync(c.id);
+      await refreshClasses();
+      showToast(`Rombel ${c.name} berhasil dihapus.`);
+    } catch {
+      showToast(`Gagal menghapus ${c.name}. Data tetap tersimpan.`);
+      return;
     }
-
-    const filtered = classesList.filter((item) => item.id !== c.id);
-    saveClassesList(filtered);
-    showToast(`Rombel ${c.name} telah berhasil dihapus.`);
 
     if (currentTier === 3 && selectedClassId === c.id) {
       setCurrentTier(2);
@@ -401,53 +248,18 @@ export default function ManajemenKelasPage() {
     const cleanName = modalName.trim() || `Kelas ${cleanCode}`;
 
     if (modalMode === "edit" && editingClassId) {
-      // Update
-      const updated = classesList.map((c) => {
-        if (c.id === editingClassId) {
-          return {
-            ...c,
-            code: cleanCode,
-            name: cleanName,
-            tingkat: modalTingkat,
-            wali: modalWali,
-          };
-        }
-        return c;
-      });
-      saveClassesList(updated);
-
-      // Backend update if valid UUID
-      if (editingClassId.length > 10) {
-        try {
-          await updateClassMutation.mutateAsync({
-            id: editingClassId,
-            data: {
-              code: cleanCode,
-              name: cleanName,
-              grade: modalTingkat,
-            },
-          });
-        } catch (err) {
-          console.warn("Backend class update note:", err);
-        }
+      try {
+        await updateClassMutation.mutateAsync({
+          id: editingClassId,
+          data: { code: cleanCode, name: cleanName, grade: modalTingkat },
+        });
+        await refreshClasses();
+        showToast(`Data ${cleanName} berhasil diperbarui.`);
+      } catch {
+        showToast(`Gagal memperbarui ${cleanName}. Data tetap tersimpan.`);
+        return;
       }
-
-      showToast(`Data ${cleanName} berhasil diperbarui.`);
     } else {
-      // Add new
-      const newClass: ClassItemData = {
-        id: `cls-${Date.now()}`,
-        code: cleanCode,
-        name: cleanName,
-        tingkat: modalTingkat,
-        wali: modalWali,
-        totalSiswa: 32,
-        percentage: 95,
-      };
-
-      saveClassesList([...classesList, newClass]);
-
-      // Try backend create
       try {
         await createClassMutation.mutateAsync({
           code: cleanCode,
@@ -455,11 +267,12 @@ export default function ManajemenKelasPage() {
           grade: modalTingkat,
           section: cleanCode.replace(/[0-9]/g, "") || "A",
         });
-      } catch (err) {
-        console.warn("Backend class create note:", err);
+        await refreshClasses();
+        showToast(`Rombel ${cleanName} berhasil ditambahkan.`);
+      } catch {
+        showToast(`Gagal menambahkan ${cleanName}. Periksa koneksi dan data formulir.`);
+        return;
       }
-
-      showToast(`Rombel ${cleanName} berhasil ditambahkan!`);
     }
 
     setIsModalOpen(false);
@@ -503,21 +316,21 @@ export default function ManajemenKelasPage() {
                 tingkat: "7",
                 title: "Tingkat 7 (Fase D)",
                 iconBg: "bg-blue-600",
-                pct: "96%",
+                pct: "Data belum tersedia",
                 list: classesByTingkat["7"] || [],
               },
               {
                 tingkat: "8",
                 title: "Tingkat 8 (Fase D)",
                 iconBg: "bg-emerald-600",
-                pct: "96%",
+                pct: "Data belum tersedia",
                 list: classesByTingkat["8"] || [],
               },
               {
                 tingkat: "9",
                 title: "Tingkat 9 (Fase D)",
                 iconBg: "bg-amber-600",
-                pct: "96%",
+                pct: "Data belum tersedia",
                 list: classesByTingkat["9"] || [],
               },
             ].map((t) => {
@@ -552,7 +365,7 @@ export default function ManajemenKelasPage() {
 
                   <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
                     <span className="text-slate-600 font-bold">{countRombel} Rombel Terdaftar</span>
-                    <span className="font-extrabold text-emerald-600">Presensi: {t.pct}</span>
+                    <span className="font-extrabold text-slate-500">Presensi: {t.pct}</span>
                   </div>
                 </div>
               );
@@ -620,9 +433,6 @@ export default function ManajemenKelasPage() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-bold text-slate-700 mr-1 hidden md:inline">
-                      {c.percentage}% Kehadiran
-                    </span>
                     <button
                       type="button"
                       onClick={(e) => handleOpenEditModal(c, e)}
@@ -652,13 +462,6 @@ export default function ManajemenKelasPage() {
                   </div>
                 </div>
 
-                {/* Green Progress Bar */}
-                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                  <div
-                    className="bg-emerald-600 h-3 rounded-full transition-all duration-500"
-                    style={{ width: `${c.percentage}%` }}
-                  />
-                </div>
               </div>
             ))}
           </div>
