@@ -30,7 +30,7 @@ import {
   useAttendanceSessions,
   useUpdateAttendanceRecords,
 } from "@/hooks/use-attendance-sessions";
-import { ClassDetailDto, AttendanceStatus } from "@komas/shared-types";
+import { ClassDetailDto, AttendanceSessionDetailDto, AttendanceStatus } from "@komas/shared-types";
 
 export type StudentAttendanceStatus = "Hadir" | "Izin" | "Sakit" | "Alpa";
 
@@ -55,6 +55,9 @@ export interface ClassSessionItem {
   submitTime: string;
   students: StudentRowItem[];
 }
+
+const EMPTY_CLASSES: ClassDetailDto[] = [];
+const EMPTY_SESSIONS: AttendanceSessionDetailDto[] = [];
 
 function normalizeGrade(gradeOrCode: string): string {
   if (!gradeOrCode) return "7";
@@ -144,7 +147,7 @@ export default function ManajemenAbsensiPage() {
 
   // Queries
   const { data: classesData } = useClasses({ per_page: 100 });
-  const classes = classesData?.data || [];
+  const classes = classesData?.data ?? EMPTY_CLASSES;
 
   const { data: teachersData } = useTeachers({ per_page: 100 });
   const teachers = teachersData?.data || [];
@@ -156,7 +159,7 @@ export default function ManajemenAbsensiPage() {
     date: activeDate,
     per_page: 100,
   });
-  const backendSessions = sessionsData?.data || [];
+  const backendSessions = sessionsData?.data ?? EMPTY_SESSIONS;
 
   const updateRecordsMutation = useUpdateAttendanceRecords();
 
@@ -220,24 +223,21 @@ export default function ManajemenAbsensiPage() {
     return map;
   }, [displayClasses]);
 
-  // Sync / Initialize attendanceSessions with classes and backend sessions
+  // Sync / Initialize attendanceSessions with classes and backend sessions.
+  // Return the previous object when its content is unchanged to avoid an effect render loop.
   React.useEffect(() => {
     if (displayClasses.length === 0) return;
 
     setAttendanceSessions((prev) => {
       const updated = { ...prev };
-      let changed = false;
 
       displayClasses.forEach((c) => {
         const key = normalizeKey(c.code);
-
-        // Check if there's a backend session for this class
         const matchedBackendSession = backendSessions.find(
           (bs) => bs.class_id === c.id || normalizeKey(bs.class_name) === key
         );
 
         if (matchedBackendSession) {
-          // Map backend session records
           const mappedStudents: StudentRowItem[] = (
             matchedBackendSession.records || []
           ).map((r, idx) => ({
@@ -266,9 +266,7 @@ export default function ManajemenAbsensiPage() {
                 ? mappedStudents
                 : DEFAULT_STUDENTS_PER_CLASS[key] || DEFAULT_STUDENTS_PER_CLASS["7a"],
           };
-          changed = true;
         } else if (!updated[key]) {
-          // Initialize with default session data
           const defaultStudents =
             DEFAULT_STUDENTS_PER_CLASS[key] ||
             DEFAULT_STUDENTS_PER_CLASS["7a"] ||
@@ -287,16 +285,18 @@ export default function ManajemenAbsensiPage() {
             submitTime: "08:30 WIB",
             students: defaultStudents.map((st) => ({ ...st })),
           };
-          changed = true;
         }
       });
 
-      if (changed) {
-        saveAttendanceSessions(updated);
-      }
-      return updated;
+      return JSON.stringify(updated) === JSON.stringify(prev) ? prev : updated;
     });
   }, [displayClasses, backendSessions]);
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("attendly_attendance_sessions_v2", JSON.stringify(attendanceSessions));
+    }
+  }, [attendanceSessions]);
 
   // Current session in Tier 3
   const currentSession = attendanceSessions[selectedClassId] || attendanceSessions["7a"];
