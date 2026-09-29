@@ -24,11 +24,22 @@ import {
   FileCode,
   Copy,
   RefreshCw,
+  Cloud,
+  CloudUpload,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
-import { useSchedules } from "@/hooks/use-schedules";
-import { useTeachers } from "@/hooks/use-teachers";
-import { useClasses } from "@/hooks/use-classes";
-import { useSubjects } from "@/hooks/use-subjects";
+import {
+  useSchedules,
+  useCreateSchedule,
+  useUpdateSchedule,
+  useDeleteSchedule,
+  useTeachingAssignments,
+  useCreateTeachingAssignment,
+} from "@/hooks/use-schedules";
+import { useTeachers, useCreateTeacher } from "@/hooks/use-teachers";
+import { useClasses, useCreateClass } from "@/hooks/use-classes";
+import { useSubjects, useCreateSubject } from "@/hooks/use-subjects";
 import { useAcademicYears } from "@/hooks/use-academic-years";
 import { ClassDetailDto } from "@komas/shared-types";
 
@@ -164,21 +175,58 @@ export default function JadwalKelasPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Queries
+  // Queries & Mutations
   const { data: academicYearsData } = useAcademicYears({ per_page: 20 });
   const activeYear = academicYearsData?.data.find((y) => y.active) || academicYearsData?.data[0];
 
-  const { data: classesData } = useClasses({ per_page: 100 });
+  const { data: classesData, refetch: refetchClasses } = useClasses({ per_page: 100 });
   const classes = classesData?.data || [];
+  const createClassMutation = useCreateClass();
 
-  const { data: teachersData } = useTeachers({ per_page: 100 });
+  const { data: teachersData, refetch: refetchTeachers } = useTeachers({ per_page: 100 });
   const teachers = teachersData?.data || [];
+  const createTeacherMutation = useCreateTeacher();
 
-  const { data: subjectsData } = useSubjects({ per_page: 100 });
+  const { data: subjectsData, refetch: refetchSubjects } = useSubjects({ per_page: 100 });
   const subjects = subjectsData?.data || [];
+  const createSubjectMutation = useCreateSubject();
 
-  const { data: schedulesData } = useSchedules({ per_page: 100 });
+  const { data: schedulesData, refetch: refetchSchedules } = useSchedules({ per_page: 100 });
   const backendSchedules = schedulesData?.data || [];
+
+  const createScheduleMutation = useCreateSchedule();
+  const updateScheduleMutation = useUpdateSchedule();
+  const deleteScheduleMutation = useDeleteSchedule();
+  const { data: assignmentsData, refetch: refetchAssignments } = useTeachingAssignments({ per_page: 200 });
+  const assignments = assignmentsData?.data || [];
+  const createAssignmentMutation = useCreateTeachingAssignment();
+
+  const [isSyncingServer, setIsSyncingServer] = React.useState(false);
+
+  // Fallback classes if database has none
+  const displayClasses = React.useMemo(() => {
+    if (classes.length > 0) {
+      return classes;
+    }
+    // Generate fallback classes matching 7A-7F, 8A-8F, 9A-9F
+    const mock: ClassDetailDto[] = [];
+    ["7", "8", "9"].forEach((t) => {
+      ["A", "B", "C", "D", "E", "F"].forEach((sec) => {
+        mock.push({
+          id: `mock-${t}${sec.toLowerCase()}`,
+          code: `${t}${sec}`,
+          name: `Kelas ${t}${sec}`,
+          grade: t,
+          section: sec,
+          total_students: 32,
+          homeroom_teacher_name: sec === "A" ? "Budi Santoso, M.Pd." : "Siti Rahmawati, S.Pd.",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
+    });
+    return mock;
+  }, [classes]);
 
   // Local storage for time slots
   const [standardTimeSlots, setStandardTimeSlots] = React.useState<TimeSlot[]>(() => {
@@ -231,43 +279,49 @@ export default function JadwalKelasPage() {
 
   // Sync / Merge backend schedules into schedulesByClass when backend data loads
   React.useEffect(() => {
-    if (backendSchedules.length > 0 && classes.length > 0) {
+    if (backendSchedules.length > 0) {
       setSchedulesByClass((prev) => {
         const updated = { ...prev };
         let hasChanges = false;
 
+        // Group backend schedules by classKey
+        const backendGrouped: Record<string, ScheduleSlotItem[]> = {};
+
         backendSchedules.forEach((bs) => {
-          const matchedClass = classes.find((c) => c.id === bs.class_id);
+          const matchedClass = displayClasses.find((c) => c.id === bs.class_id);
           const classKey = matchedClass ? normalizeClassKey(matchedClass.code) : bs.class_id;
 
-          if (!updated[classKey]) {
-            updated[classKey] = [];
+          if (!backendGrouped[classKey]) {
+            backendGrouped[classKey] = [];
           }
 
           const dayName = DAY_MAP_NUM_TO_NAME[bs.day_of_week] || "Senin";
-          const formattedTime = bs.period_no
-            ? `Jam ke-${bs.period_no}`
-            : `${formatTimeDisplay(bs.starts_at ?? "")} - ${formatTimeDisplay(bs.ends_at ?? "")}`;
+          const startTime = formatTimeDisplay(bs.starts_at ?? "");
+          const endTime = formatTimeDisplay(bs.ends_at ?? "");
+          const formattedTime = (startTime && endTime)
+            ? `${startTime} - ${endTime}`
+            : (bs.period_no ? `Jam ke-${bs.period_no}` : "");
 
           const matchedSubject = subjects.find((s) => s.id === bs.subject_id);
-          const matchedTeacher = teachers.find((t) => t.id === bs.teacher_id);
-
-          const exists = updated[classKey].some(
-            (item) => item.day === dayName && item.time === formattedTime
+          const matchedTeacher = teachers.find(
+            (t) => t.user_id === bs.teacher_id || t.id === bs.teacher_id
           );
 
-          if (!exists) {
-            hasChanges = true;
-            updated[classKey].push({
-              id: bs.id,
-              day: dayName,
-              time: formattedTime,
-              subject: matchedSubject?.name || "Mata Pelajaran",
-              code: matchedSubject?.code || "MPL",
-              teacher: matchedTeacher?.full_name || "Guru Pengampu",
-              room: matchedClass ? `Ruang ${matchedClass.code}` : "Ruang Kelas",
-            });
-          }
+          backendGrouped[classKey].push({
+            id: bs.id,
+            day: dayName,
+            time: formattedTime,
+            subject: matchedSubject?.name || "Mata Pelajaran",
+            code: matchedSubject?.code || (matchedSubject?.name ? matchedSubject.name.substring(0, 3).toUpperCase() : "MPL"),
+            teacher: matchedTeacher?.full_name || "Guru Pengampu",
+            room: matchedClass ? `Ruang ${matchedClass.code}` : "Ruang Kelas",
+          });
+        });
+
+        // For classes with backend data, replace with server data
+        Object.keys(backendGrouped).forEach((cKey) => {
+          updated[cKey] = backendGrouped[cKey];
+          hasChanges = true;
         });
 
         // Ensure default 7A schedule is always available if empty
@@ -282,32 +336,119 @@ export default function JadwalKelasPage() {
         return updated;
       });
     }
-  }, [backendSchedules, classes, subjects, teachers]);
+  }, [backendSchedules, displayClasses, subjects, teachers]);
 
-  // Fallback classes if database has none
-  const displayClasses = React.useMemo(() => {
-    if (classes.length > 0) {
-      return classes;
-    }
-    // Generate fallback classes matching 7A-7F, 8A-8F, 9A-9F
-    const mock: ClassDetailDto[] = [];
-    ["7", "8", "9"].forEach((t) => {
-      ["A", "B", "C", "D", "E", "F"].forEach((sec) => {
-        mock.push({
-          id: `mock-${t}${sec.toLowerCase()}`,
-          code: `${t}${sec}`,
-          name: `Kelas ${t}${sec}`,
-          grade: t,
-          section: sec,
-          total_students: 32,
-          homeroom_teacher_name: sec === "A" ? "Budi Santoso, M.Pd." : "Siti Rahmawati, S.Pd.",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+  // Helper to parse time string "07.00 - 08.20" to HH:MM format
+  const parseTimeRangeToHHMM = (timeRange: string): { starts_at: string; ends_at: string } => {
+    const parts = timeRange.split("-").map((t) => t.trim().replace(".", ":"));
+    let starts_at = parts[0] || "07:00";
+    let ends_at = parts[1] || "08:20";
+    if (starts_at.length === 5) starts_at = `${starts_at}:00`;
+    if (ends_at.length === 5) ends_at = `${ends_at}:00`;
+    return { starts_at, ends_at };
+  };
+
+  // Helper to ensure dependencies exist in database and return teaching_assignment_id
+  const ensureTeachingAssignmentOnServer = async (
+    targetClassObj: ClassDetailDto,
+    subjectName: string,
+    subjectCode: string,
+    teacherName: string
+  ): Promise<string | null> => {
+    try {
+      // 1. Ensure Active Academic Year
+      const currentYearId = activeYear?.id;
+      if (!currentYearId) {
+        throw new Error("Tahun ajaran aktif tidak ditemukan di server");
+      }
+
+      // 2. Ensure Class exists on server
+      let classId = targetClassObj.id;
+      if (!classId || classId.startsWith("mock-")) {
+        const existingClass = classes.find(
+          (c) => c.code.toLowerCase() === targetClassObj.code.toLowerCase()
+        );
+        if (existingClass) {
+          classId = existingClass.id;
+        } else {
+          const newClass = await createClassMutation.mutateAsync({
+            code: targetClassObj.code,
+            name: targetClassObj.name || `Kelas ${targetClassObj.code}`,
+            grade: normalizeGrade(targetClassObj.grade || targetClassObj.code),
+            section: targetClassObj.section || targetClassObj.code.slice(-1) || "A",
+            academic_year_id: currentYearId,
+          });
+          classId = newClass.id;
+        }
+      }
+
+      // 3. Ensure Subject exists on server
+      let subjectId = "";
+      const existingSub = subjects.find(
+        (s) =>
+          s.code.toLowerCase() === subjectCode.toLowerCase() ||
+          s.name.toLowerCase() === subjectName.toLowerCase()
+      );
+      if (existingSub) {
+        subjectId = existingSub.id;
+      } else {
+        const newSub = await createSubjectMutation.mutateAsync({
+          code: subjectCode || subjectName.substring(0, 3).toUpperCase(),
+          name: subjectName,
         });
+        subjectId = newSub.id;
+      }
+
+      // 4. Ensure Teacher exists on server (requires user with role TEACHER)
+      let teacherUserId = "";
+      const existingTeacher = teachers.find(
+        (t) =>
+          t.full_name.toLowerCase() === teacherName.toLowerCase() ||
+          t.full_name.toLowerCase().includes(teacherName.toLowerCase()) ||
+          teacherName.toLowerCase().includes(t.full_name.toLowerCase())
+      );
+      if (existingTeacher) {
+        teacherUserId = existingTeacher.user_id || existingTeacher.id;
+      } else {
+        const slug =
+          teacherName
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "")
+            .substring(0, 15) || "guru";
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const newTeacher = await createTeacherMutation.mutateAsync({
+          full_name: teacherName,
+          nip: `198${Date.now().toString().slice(-10)}${randomNum}`,
+          email: `${slug}_${randomNum}@smpn1tirtajaya.sch.id`,
+        });
+        teacherUserId = newTeacher.user_id || newTeacher.id;
+      }
+
+      // 5. Ensure Teaching Assignment exists
+      const existingAssignment = assignments.find(
+        (a) =>
+          a.class_id === classId &&
+          a.subject_id === subjectId &&
+          a.teacher_id === teacherUserId &&
+          a.academic_year_id === currentYearId
+      );
+      if (existingAssignment) {
+        return existingAssignment.id;
+      }
+
+      const newAssignment = await createAssignmentMutation.mutateAsync({
+        class_id: classId,
+        subject_id: subjectId,
+        teacher_id: teacherUserId,
+        academic_year_id: currentYearId,
       });
-    });
-    return mock;
-  }, [classes]);
+
+      return newAssignment.id;
+    } catch (err: any) {
+      console.warn("Could not ensure server dependencies for assignment:", err);
+      return null;
+    }
+  };
 
   // Active selected class object
   const selectedClass = React.useMemo(() => {
@@ -697,20 +838,65 @@ export default function JadwalKelasPage() {
     e.target.value = "";
   };
 
-  const handleExecuteImport = () => {
+  const handleExecuteImport = async () => {
     if (importParsedItems.length === 0) return;
     setIsImporting(true);
 
     try {
       const targetKey = importTargetClassKey || currentClassKey;
-      let targetList = importMode === "replace" ? [] : [...(schedulesByClass[targetKey] || [])];
+      const targetClassObj =
+        displayClasses.find(
+          (c) => normalizeClassKey(c.code) === targetKey || c.id === targetKey
+        ) || selectedClass;
 
-      importParsedItems.forEach((newItem) => {
+      let targetList = importMode === "replace" ? [] : [...(schedulesByClass[targetKey] || [])];
+      let serverCreatedCount = 0;
+
+      for (const newItem of importParsedItems) {
+        let finalSlotId: string | number = newItem.id;
+
+        if (targetClassObj) {
+          try {
+            const assignmentId = await ensureTeachingAssignmentOnServer(
+              targetClassObj,
+              newItem.subject,
+              newItem.code,
+              newItem.teacher
+            );
+
+            if (assignmentId && activeYear) {
+              const { starts_at, ends_at } = parseTimeRangeToHHMM(newItem.time);
+              const dayNum = DAY_MAP_NAME_TO_NUM[newItem.day.toLowerCase()] || 1;
+
+              const created = await createScheduleMutation.mutateAsync({
+                teaching_assignment_id: assignmentId,
+                day_of_week: dayNum,
+                starts_at,
+                ends_at,
+                effective_from: activeYear.starts_on,
+                effective_until: activeYear.ends_on || null,
+              });
+
+              if (created && created.id) {
+                finalSlotId = created.id;
+                serverCreatedCount++;
+              }
+            }
+          } catch (serverErr) {
+            console.warn("Gagal menyimpan slot ke server:", serverErr);
+          }
+        }
+
+        const slotToSave: ScheduleSlotItem = {
+          ...newItem,
+          id: finalSlotId,
+        };
+
         targetList = targetList.filter(
-          (existing) => !(existing.day === newItem.day && existing.time === newItem.time)
+          (existing) => !(existing.day === slotToSave.day && existing.time === slotToSave.time)
         );
-        targetList.push(newItem);
-      });
+        targetList.push(slotToSave);
+      }
 
       const updated = {
         ...schedulesByClass,
@@ -718,12 +904,27 @@ export default function JadwalKelasPage() {
       };
 
       saveSchedulesByClass(updated);
-      showToast(`Berhasil mengimpor ${importParsedItems.length} slot jadwal!`);
+      refetchSchedules();
+      refetchClasses();
+      refetchSubjects();
+      refetchTeachers();
+      refetchAssignments();
+
+      if (serverCreatedCount > 0) {
+        showToast(
+          `Berhasil mengimpor ${importParsedItems.length} slot (${serverCreatedCount} tersimpan ke server database)!`
+        );
+      } else {
+        showToast(
+          `Berhasil mengimpor ${importParsedItems.length} slot jadwal ke browser.`
+        );
+      }
+
       setIsImportModalOpen(false);
       setImportPasteText("");
       setImportParsedItems([]);
     } catch (err: any) {
-      alert(`Terjadi kesalahan saat menyimpan: ${err.message}`);
+      alert(`Terjadi kesalahan saat mengimpor: ${err.message}`);
     } finally {
       setIsImporting(false);
     }
@@ -825,18 +1026,37 @@ export default function JadwalKelasPage() {
     setIsSlotModalOpen(true);
   };
 
-  const handleDeleteSlot = (slotId: string | number) => {
+  const handleDeleteSlot = async (slotId: string | number) => {
     if (!confirm("Hapus slot mata pelajaran ini dari jadwal?")) return;
+
+    const isServerSlot =
+      typeof slotId === "string" &&
+      !slotId.startsWith("mock") &&
+      !slotId.startsWith("slot-") &&
+      slotId.length === 36;
+
+    if (isServerSlot) {
+      try {
+        await deleteScheduleMutation.mutateAsync(slotId);
+        showToast("Slot jadwal berhasil dihapus dari server database!");
+        refetchSchedules();
+      } catch (err: any) {
+        console.error("Gagal menghapus slot dari server:", err);
+        showToast("Gagal menghapus dari server: " + (err.message || "Terjadi kesalahan"));
+      }
+    } else {
+      showToast("Slot jadwal lokal berhasil dihapus");
+    }
+
     const filtered = currentClassSchedules.filter((s) => s.id !== slotId);
     const updated = {
       ...schedulesByClass,
       [currentClassKey]: filtered,
     };
     saveSchedulesByClass(updated);
-    showToast("Slot jadwal berhasil dihapus");
   };
 
-  const handleSaveSlot = (e: React.FormEvent) => {
+  const handleSaveSlot = async (e: React.FormEvent) => {
     e.preventDefault();
 
     let finalTime = slotTimeSelect;
@@ -848,8 +1068,70 @@ export default function JadwalKelasPage() {
       finalTime = `${customStartTime.replace(":", ".")} - ${customEndTime.replace(":", ".")}`;
     }
 
+    const { starts_at, ends_at } = parseTimeRangeToHHMM(finalTime);
+    const dayNum = DAY_MAP_NAME_TO_NUM[slotDay.toLowerCase()] || 1;
+
     const matchedSub = subjects.find((s) => s.name === slotSubject);
     const subCode = matchedSub ? matchedSub.code : slotSubject.substring(0, 3).toUpperCase();
+
+    let savedId: string | number = Date.now();
+    let savedOnServer = false;
+
+    if (slotModalMode === "edit" && editingSlotId) {
+      savedId = editingSlotId;
+      const isServerSlot =
+        typeof editingSlotId === "string" &&
+        !editingSlotId.startsWith("mock") &&
+        !editingSlotId.startsWith("slot-") &&
+        editingSlotId.length === 36;
+
+      if (isServerSlot) {
+        try {
+          await updateScheduleMutation.mutateAsync({
+            id: String(editingSlotId),
+            data: {
+              day_of_week: dayNum,
+              starts_at,
+              ends_at,
+            },
+          });
+          savedOnServer = true;
+          refetchSchedules();
+        } catch (err: any) {
+          console.warn("Gagal update jadwal di server:", err);
+        }
+      }
+    } else {
+      // Adding new slot: try saving to server if selectedClass exists
+      if (selectedClass) {
+        try {
+          const assignmentId = await ensureTeachingAssignmentOnServer(
+            selectedClass,
+            slotSubject,
+            subCode,
+            slotTeacher
+          );
+
+          if (assignmentId && activeYear) {
+            const created = await createScheduleMutation.mutateAsync({
+              teaching_assignment_id: assignmentId,
+              day_of_week: dayNum,
+              starts_at,
+              ends_at,
+              effective_from: activeYear.starts_on,
+              effective_until: activeYear.ends_on || null,
+            });
+            if (created && created.id) {
+              savedId = created.id;
+              savedOnServer = true;
+              refetchSchedules();
+            }
+          }
+        } catch (err: any) {
+          console.warn("Gagal membuat jadwal di server:", err);
+        }
+      }
+    }
 
     let updatedList = [...currentClassSchedules];
 
@@ -868,7 +1150,11 @@ export default function JadwalKelasPage() {
         }
         return s;
       });
-      showToast("Slot jadwal berhasil diperbarui");
+      showToast(
+        savedOnServer
+          ? "Slot jadwal berhasil diperbarui di server database!"
+          : "Slot jadwal berhasil diperbarui (tersimpan di lokal)"
+      );
     } else {
       // Add new
       // Remove conflict if any on same day and time
@@ -877,7 +1163,7 @@ export default function JadwalKelasPage() {
       );
 
       updatedList.push({
-        id: Date.now(),
+        id: savedId,
         day: slotDay,
         time: finalTime,
         subject: slotSubject,
@@ -885,7 +1171,11 @@ export default function JadwalKelasPage() {
         teacher: slotTeacher,
         room: slotRoom || (selectedClass ? `Ruang ${selectedClass.code}` : "Ruang Kelas"),
       });
-      showToast(`Slot ${slotSubject} hari ${slotDay} berhasil disimpan`);
+      showToast(
+        savedOnServer
+          ? `Slot ${slotSubject} hari ${slotDay} tersimpan ke server database!`
+          : `Slot ${slotSubject} hari ${slotDay} tersimpan di browser`
+      );
     }
 
     const updated = {
@@ -894,6 +1184,97 @@ export default function JadwalKelasPage() {
     };
     saveSchedulesByClass(updated);
     setIsSlotModalOpen(false);
+  };
+
+  const handleSyncClassToServer = async () => {
+    if (!selectedClass) return;
+    const slots = currentClassSchedules;
+    if (slots.length === 0) {
+      alert("Tidak ada slot jadwal untuk disinkronkan.");
+      return;
+    }
+
+    if (!confirm(`Sinkronkan seluruh ${slots.length} slot jadwal ${selectedClass.name} ke server database PostgreSQL?`)) {
+      return;
+    }
+
+    setIsSyncingServer(true);
+    let successCount = 0;
+
+    try {
+      const updatedList: ScheduleSlotItem[] = [];
+
+      for (const slot of slots) {
+        let slotId = slot.id;
+        const isAlreadyServerSlot =
+          typeof slot.id === "string" &&
+          !slot.id.startsWith("mock") &&
+          !slot.id.startsWith("slot-") &&
+          slot.id.length === 36;
+
+        if (isAlreadyServerSlot) {
+          updatedList.push(slot);
+          successCount++;
+          continue;
+        }
+
+        try {
+          const assignmentId = await ensureTeachingAssignmentOnServer(
+            selectedClass,
+            slot.subject,
+            slot.code,
+            slot.teacher
+          );
+
+          if (assignmentId && activeYear) {
+            const { starts_at, ends_at } = parseTimeRangeToHHMM(slot.time);
+            const dayNum = DAY_MAP_NAME_TO_NUM[slot.day.toLowerCase()] || 1;
+
+            const created = await createScheduleMutation.mutateAsync({
+              teaching_assignment_id: assignmentId,
+              day_of_week: dayNum,
+              starts_at,
+              ends_at,
+              effective_from: activeYear.starts_on,
+              effective_until: activeYear.ends_on || null,
+            });
+
+            if (created && created.id) {
+              slotId = created.id;
+              successCount++;
+            }
+          }
+        } catch (slotErr) {
+          console.warn("Gagal sinkronkan slot:", slotErr);
+        }
+
+        updatedList.push({
+          ...slot,
+          id: slotId,
+        });
+      }
+
+      const updated = {
+        ...schedulesByClass,
+        [currentClassKey]: updatedList,
+      };
+      saveSchedulesByClass(updated);
+      refetchSchedules();
+      refetchClasses();
+      refetchSubjects();
+      refetchTeachers();
+      refetchAssignments();
+
+      if (successCount > 0) {
+        showToast(`Berhasil menyinkronkan ${successCount} slot ke database server!`);
+      } else {
+        showToast("Gagal menyinkronkan ke server. Pastikan backend aktif.");
+      }
+    } catch (err: any) {
+      alert(`Gagal sinkronisasi: ${err.message}`);
+    } finally {
+      setIsSyncingServer(false);
+    }
   };
 
   return (
@@ -1150,6 +1531,21 @@ export default function JadwalKelasPage() {
 
               <button
                 type="button"
+                onClick={handleSyncClassToServer}
+                disabled={isSyncingServer}
+                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Simpan & sinkronkan seluruh jadwal kelas ini ke database server PostgreSQL agar tersinkron di semua device"
+              >
+                {isSyncingServer ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-700" />
+                ) : (
+                  <CloudUpload className="w-3.5 h-3.5 text-indigo-700" />
+                )}
+                <span>{isSyncingServer ? "Menyinkronkan..." : "Simpan ke Database Server"}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setIsManageTimeModalOpen(true)}
                 className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
                 title="Sesuaikan daftar jam & waktu pelajaran sekolah"
@@ -1268,9 +1664,19 @@ export default function JadwalKelasPage() {
                               >
                                 <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-2.5 shadow-2xs hover:border-[#0c3960] hover:shadow-xs transition group">
                                   <div className="flex items-center justify-between mb-1">
-                                    <span className="px-1.5 py-0.5 rounded bg-blue-100 text-[#0c3960] font-black text-[9px]">
-                                      {matchedSlot.code}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="px-1.5 py-0.5 rounded bg-blue-100 text-[#0c3960] font-black text-[9px]">
+                                        {matchedSlot.code}
+                                      </span>
+                                      {typeof matchedSlot.id === "string" && matchedSlot.id.length === 36 && (
+                                        <span
+                                          className="inline-flex items-center text-emerald-600"
+                                          title="Tersimpan di Database Server PostgreSQL (Tersinkron antar device)"
+                                        >
+                                          <CheckCircle2 className="w-3 h-3" />
+                                        </span>
+                                      )}
+                                    </div>
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                                       <button
                                         type="button"
