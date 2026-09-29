@@ -17,6 +17,13 @@ import {
   CalendarDays,
   Check,
   AlertCircle,
+  Download,
+  Upload,
+  FileJson,
+  FileSpreadsheet,
+  FileCode,
+  Copy,
+  RefreshCw,
 } from "lucide-react";
 import { useSchedules } from "@/hooks/use-schedules";
 import { useTeachers } from "@/hooks/use-teachers";
@@ -37,6 +44,16 @@ const DAY_MAP_NUM_TO_NAME: Record<number, string> = {
   5: "Jumat",
   6: "Sabtu",
   7: "Minggu",
+};
+
+const DAY_MAP_NAME_TO_NUM: Record<string, number> = {
+  senin: 1,
+  selasa: 2,
+  rabu: 3,
+  kamis: 4,
+  jumat: 5,
+  sabtu: 6,
+  minggu: 7,
 };
 
 export interface TimeSlot {
@@ -404,6 +421,373 @@ export default function JadwalKelasPage() {
     showToast(`Jadwal standar berhasil dimuat untuk ${selectedClass.name}`);
   };
 
+  // Export Modal state
+  const [isExportModalOpen, setIsExportModalOpen] = React.useState(false);
+  const [exportFormat, setExportFormat] = React.useState<"json" | "sql" | "csv">("json");
+  const [exportScope, setExportScope] = React.useState<"current" | "all">("current");
+  const [isExportCopied, setIsExportCopied] = React.useState(false);
+
+  // Import Modal state
+  const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
+  const [importMode, setImportMode] = React.useState<"replace" | "append">("replace");
+  const [importTargetClassKey, setImportTargetClassKey] = React.useState<string>("");
+  const [importPasteText, setImportPasteText] = React.useState("");
+  const [importParsedItems, setImportParsedItems] = React.useState<ScheduleSlotItem[]>([]);
+  const [importError, setImportError] = React.useState<string | null>(null);
+  const [isImporting, setIsImporting] = React.useState(false);
+
+  // Export generator
+  const generateExportContent = React.useCallback(() => {
+    const isAll = exportScope === "all";
+
+    if (exportFormat === "json") {
+      if (isAll) {
+        const allData: Record<string, { className: string; classCode: string; slots: ScheduleSlotItem[] }> = {};
+        displayClasses.forEach((c) => {
+          const key = normalizeClassKey(c.code);
+          allData[key] = {
+            className: c.name,
+            classCode: c.code,
+            slots: schedulesByClass[key] || [],
+          };
+        });
+        return JSON.stringify(allData, null, 2);
+      } else {
+        const slots = currentClassSchedules.map((s) => ({
+          hari: s.day,
+          jam: s.time,
+          jam_ke: s.jamLabel || "",
+          mapel: s.subject,
+          kode: s.code,
+          guru: s.teacher,
+          ruang: s.room,
+          kelas: selectedClass ? selectedClass.code : "",
+        }));
+        return JSON.stringify(slots, null, 2);
+      }
+    }
+
+    if (exportFormat === "csv") {
+      const rows: string[] = ["Hari,Jam,Jam Ke,Mata Pelajaran,Kode,Guru Pengampu,Ruangan,Kelas"];
+      if (isAll) {
+        displayClasses.forEach((c) => {
+          const key = normalizeClassKey(c.code);
+          (schedulesByClass[key] || []).forEach((s) => {
+            rows.push(
+              `"${s.day}","${s.time}","${s.jamLabel || ""}","${s.subject}","${s.code}","${s.teacher}","${s.room}","${c.code}"`
+            );
+          });
+        });
+      } else {
+        currentClassSchedules.forEach((s) => {
+          rows.push(
+            `"${s.day}","${s.time}","${s.jamLabel || ""}","${s.subject}","${s.code}","${s.teacher}","${s.room}","${selectedClass?.code || ""}"`
+          );
+        });
+      }
+      return rows.join("\n");
+    }
+
+    if (exportFormat === "sql") {
+      const timestamp = new Date().toISOString();
+      const classNameStr = selectedClass ? selectedClass.code : "SEMUA_KELAS";
+      let sql = `-- ==========================================================================\n`;
+      sql += `-- Attendly Database Seed / Import Script for Schedules\n`;
+      sql += `-- Target: ${isAll ? "Semua Kelas" : `Kelas ${classNameStr}`}\n`;
+      sql += `-- Generated: ${timestamp}\n`;
+      sql += `-- ==========================================================================\n\n`;
+      sql += `BEGIN;\n\n`;
+
+      const classesToProcess = isAll ? displayClasses : selectedClass ? [selectedClass] : [];
+
+      classesToProcess.forEach((c) => {
+        const key = normalizeClassKey(c.code);
+        const slots = schedulesByClass[key] || [];
+        if (slots.length === 0) return;
+
+        sql += `-- Jadwal untuk Kelas ${c.code} (${c.name})\n`;
+        slots.forEach((s) => {
+          const dayNum = DAY_MAP_NAME_TO_NUM[s.day.toLowerCase()] || 1;
+          const timeParts = s.time.split("-").map((t) => t.trim().replace(".", ":"));
+          const startsAt = timeParts[0] ? (timeParts[0].length === 5 ? `${timeParts[0]}:00` : timeParts[0]) : "07:30:00";
+          const endsAt = timeParts[1] ? (timeParts[1].length === 5 ? `${timeParts[1]}:00` : timeParts[1]) : "08:50:00";
+
+          sql += `INSERT INTO class_schedules (id, teaching_assignment_id, teacher_id, class_id, academic_year_id, day_of_week, starts_at, ends_at, effective_from, effective_until, active)\n`;
+          sql += `SELECT uuid_generate_v4(), ta.id, ta.teacher_id, ta.class_id, ta.academic_year_id, ${dayNum}, '${startsAt}'::time, '${endsAt}'::time, ay.starts_on, ay.ends_on, TRUE\n`;
+          sql += `FROM teaching_assignments ta\n`;
+          sql += `JOIN classes c ON c.id = ta.class_id\n`;
+          sql += `JOIN subjects s ON s.id = ta.subject_id\n`;
+          sql += `JOIN academic_years ay ON ay.id = ta.academic_year_id AND ay.active\n`;
+          sql += `WHERE c.code = '${c.code}' AND (s.code = '${s.code}' OR s.name ILIKE '%${s.subject}%')\n`;
+          sql += `ON CONFLICT DO NOTHING;\n\n`;
+        });
+      });
+
+      sql += `COMMIT;\n`;
+      return sql;
+    }
+
+    return "";
+  }, [exportFormat, exportScope, currentClassSchedules, displayClasses, schedulesByClass, selectedClass]);
+
+  const handleDownloadExport = () => {
+    const content = generateExportContent();
+    const isAll = exportScope === "all";
+    const baseName = isAll ? "jadwal_semua_kelas" : `jadwal_${selectedClass?.code || "kelas"}`;
+    const ext = exportFormat === "json" ? "json" : exportFormat === "csv" ? "csv" : "sql";
+    const mime =
+      exportFormat === "json"
+        ? "application/json"
+        : exportFormat === "csv"
+        ? "text/csv"
+        : "application/sql";
+
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${baseName}_${new Date().toISOString().split("T")[0]}.${ext}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`File ${ext.toUpperCase()} berhasil diunduh!`);
+  };
+
+  const handleCopyExport = () => {
+    const content = generateExportContent();
+    navigator.clipboard.writeText(content);
+    setIsExportCopied(true);
+    showToast("Berhasil disalin ke clipboard!");
+    setTimeout(() => setIsExportCopied(false), 2000);
+  };
+
+  const handleParseImportText = (text: string) => {
+    setImportPasteText(text);
+    setImportError(null);
+
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setImportParsedItems([]);
+      return;
+    }
+
+    try {
+      // 1. Try parsing JSON
+      if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+        const parsed = JSON.parse(trimmed);
+        let items: any[] = [];
+
+        if (Array.isArray(parsed)) {
+          items = parsed;
+        } else if (typeof parsed === "object" && parsed !== null) {
+          if (Array.isArray(parsed.slots)) {
+            items = parsed.slots;
+          } else if (Array.isArray(parsed.schedules)) {
+            items = parsed.schedules;
+          } else {
+            const currentKey = importTargetClassKey || currentClassKey;
+            if (Array.isArray(parsed[currentKey])) {
+              items = parsed[currentKey];
+            } else if (Array.isArray(parsed[currentKey.toLowerCase()])) {
+              items = parsed[currentKey.toLowerCase()];
+            } else {
+              Object.values(parsed).forEach((val: any) => {
+                if (Array.isArray(val)) {
+                  items.push(...val);
+                } else if (val && Array.isArray(val.slots)) {
+                  items.push(...val.slots);
+                }
+              });
+            }
+          }
+        }
+
+        if (items.length === 0) {
+          setImportError("JSON valid tetapi tidak menemukan daftar slot jadwal.");
+          setImportParsedItems([]);
+          return;
+        }
+
+        const normalized: ScheduleSlotItem[] = items.map((item: any, idx: number) => {
+          const rawDay = String(item.day || item.hari || "Senin");
+          const day = DAYS_OF_WEEK.find((d) => d.toLowerCase() === rawDay.toLowerCase()) || rawDay;
+          const time = String(item.time || item.jam || item.waktu || "07.00 - 08.20");
+          const subject = String(item.subject || item.mapel || item.mata_pelajaran || "Mata Pelajaran");
+          const code = String(item.code || item.kode || item.kode_mapel || subject.substring(0, 3).toUpperCase());
+          const teacher = String(item.teacher || item.guru || item.nama_guru || "Guru Pengampu");
+          const room = String(item.room || item.ruang || item.ruangan || (selectedClass ? `Ruang ${selectedClass.code}` : "Ruang Kelas"));
+          const jamLabel = item.jamLabel || item.jam_ke || undefined;
+
+          return {
+            id: item.id || Date.now() + idx,
+            day,
+            time,
+            jamLabel,
+            subject,
+            code,
+            teacher,
+            room,
+          };
+        });
+
+        setImportParsedItems(normalized);
+        return;
+      }
+
+      // 2. Try parsing CSV
+      const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      if (lines.length > 0) {
+        const parsedCsvItems: ScheduleSlotItem[] = [];
+        const isHeader = lines[0].toLowerCase().includes("hari") || lines[0].toLowerCase().includes("day") || lines[0].toLowerCase().includes("mapel");
+        const dataLines = isHeader ? lines.slice(1) : lines;
+
+        dataLines.forEach((line, idx) => {
+          const rawCols = line.includes(";") ? line.split(";") : line.split(",");
+          const cleanCols = rawCols.map((c) => c.trim().replace(/^"(.*)"$/, "$1").replace(/""/g, '"'));
+
+          if (cleanCols.length >= 2) {
+            const rawDay = cleanCols[0] || "Senin";
+            const day = DAYS_OF_WEEK.find((d) => d.toLowerCase() === rawDay.toLowerCase()) || rawDay;
+            const time = cleanCols[1] || "07.00 - 08.20";
+            const jamLabel = cleanCols[2] && cleanCols[2].toLowerCase().startsWith("jam") ? cleanCols[2] : undefined;
+            const subject = cleanCols[3] || cleanCols[2] || "Mata Pelajaran";
+            const code = cleanCols[4] || subject.substring(0, 3).toUpperCase();
+            const teacher = cleanCols[5] || "Guru Pengampu";
+            const room = cleanCols[6] || (selectedClass ? `Ruang ${selectedClass.code}` : "Ruang Kelas");
+
+            parsedCsvItems.push({
+              id: Date.now() + idx,
+              day,
+              time,
+              jamLabel,
+              subject,
+              code,
+              teacher,
+              room,
+            });
+          }
+        });
+
+        if (parsedCsvItems.length > 0) {
+          setImportParsedItems(parsedCsvItems);
+          return;
+        }
+      }
+
+      setImportError("Format tidak dikenali. Gunakan format JSON atau CSV sesuai template.");
+      setImportParsedItems([]);
+    } catch (err: any) {
+      setImportError(`Gagal membaca data: ${err.message || "Pastikan sintaks JSON/CSV benar"}`);
+      setImportParsedItems([]);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        handleParseImportText(content);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleExecuteImport = () => {
+    if (importParsedItems.length === 0) return;
+    setIsImporting(true);
+
+    try {
+      const targetKey = importTargetClassKey || currentClassKey;
+      let targetList = importMode === "replace" ? [] : [...(schedulesByClass[targetKey] || [])];
+
+      importParsedItems.forEach((newItem) => {
+        targetList = targetList.filter(
+          (existing) => !(existing.day === newItem.day && existing.time === newItem.time)
+        );
+        targetList.push(newItem);
+      });
+
+      const updated = {
+        ...schedulesByClass,
+        [targetKey]: targetList,
+      };
+
+      saveSchedulesByClass(updated);
+      showToast(`Berhasil mengimpor ${importParsedItems.length} slot jadwal!`);
+      setIsImportModalOpen(false);
+      setImportPasteText("");
+      setImportParsedItems([]);
+    } catch (err: any) {
+      alert(`Terjadi kesalahan saat menyimpan: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleDownloadTemplate = (format: "json" | "csv") => {
+    if (format === "json") {
+      const sample = [
+        {
+          hari: "Senin",
+          jam: "07.00 - 08.20",
+          jam_ke: "Jam 1-2",
+          mapel: "Bahasa Indonesia",
+          kode: "BIN",
+          guru: "Siti Rahmawati, S.Pd.",
+          ruang: "Ruang 7A",
+        },
+        {
+          hari: "Senin",
+          jam: "08.20 - 09.40",
+          jam_ke: "Jam 3-4",
+          mapel: "Matematika",
+          kode: "MTK",
+          guru: "Budi Santoso, M.Pd.",
+          ruang: "Ruang 7A",
+        },
+        {
+          hari: "Selasa",
+          jam: "07.00 - 08.20",
+          jam_ke: "Jam 1-2",
+          mapel: "Bahasa Inggris",
+          kode: "BIG",
+          guru: "Ahmad Fauzi, S.Pd.",
+          ruang: "Ruang 7A",
+        },
+        {
+          hari: "Rabu",
+          jam: "10.00 - 11.20",
+          jam_ke: "Jam 5-6",
+          mapel: "Ilmu Pengetahuan Alam (IPA)",
+          kode: "IPA",
+          guru: "Rina Marlina, S.Si.",
+          ruang: "Lab IPA",
+        },
+      ];
+      const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "template_jadwal_sekolah.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const csv = `hari,jam,jam_ke,mapel,kode,guru,ruang\nSenin,07.00 - 08.20,Jam 1-2,Bahasa Indonesia,BIN,Siti Rahmawati S.Pd.,Ruang 7A\nSenin,08.20 - 09.40,Jam 3-4,Matematika,MTK,Budi Santoso M.Pd.,Ruang 7A\nSelasa,07.00 - 08.20,Jam 1-2,Bahasa Inggris,BIG,Ahmad Fauzi S.Pd.,Ruang 7A\nRabu,10.00 - 11.20,Jam 5-6,Ilmu Pengetahuan Alam (IPA),IPA,Rina Marlina S.Si.,Lab IPA`;
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "template_jadwal_sekolah.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   // Open Modal Slot
   const handleOpenAddSlot = (presetDay?: string, presetTime?: string) => {
     setSlotModalMode("add");
@@ -537,9 +921,40 @@ export default function JadwalKelasPage() {
                 Pilih tingkat 7, 8, atau 9 untuk melihat dan mengelola jadwal pelajaran roster mingguan (Senin s/d Jumat).
               </p>
             </div>
-            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl self-start sm:self-auto">
-              {activeYear ? `Tahun Ajaran ${activeYear.name}` : "Tahun Ajaran 2026/2027"}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setExportScope("all");
+                  setIsExportModalOpen(true);
+                }}
+                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                title="Ekspor seluruh jadwal sekolah ke format JSON, SQL, atau CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-600" />
+                <span>Ekspor Semua Jadwal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setImportPasteText("");
+                  setImportParsedItems([]);
+                  setImportError(null);
+                  setImportTargetClassKey(displayClasses[0] ? normalizeClassKey(displayClasses[0].code) : "7a");
+                  setIsImportModalOpen(true);
+                }}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                title="Impor jadwal pelajaran dari file JSON atau CSV"
+              >
+                <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Impor Jadwal</span>
+              </button>
+
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2.5 rounded-xl">
+                {activeYear ? `Tahun Ajaran ${activeYear.name}` : "Tahun Ajaran 2026/2027"}
+              </span>
+            </div>
           </div>
 
           {/* Cards Tingkat 7, 8, 9 */}
@@ -704,6 +1119,35 @@ export default function JadwalKelasPage() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setExportScope("current");
+                  setIsExportModalOpen(true);
+                }}
+                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                title="Ekspor jadwal kelas ini ke format JSON, SQL, atau CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-600" />
+                <span>Ekspor Jadwal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setImportPasteText("");
+                  setImportParsedItems([]);
+                  setImportError(null);
+                  setImportTargetClassKey(currentClassKey);
+                  setIsImportModalOpen(true);
+                }}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                title="Impor jadwal kelas ini dari file JSON atau CSV"
+              >
+                <Upload className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Impor Jadwal</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsManageTimeModalOpen(true)}
@@ -1230,6 +1674,329 @@ export default function JadwalKelasPage() {
                 className="px-4 py-2 bg-[#0c3960] text-white rounded-xl font-bold cursor-pointer hover:bg-[#092b49]"
               >
                 Selesai
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EKSPOR JADWAL */}
+      {/* ========================================================================= */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#0c3960] flex items-center justify-center">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Ekspor Jadwal Pelajaran</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Unduh data jadwal ke format JSON, SQL, atau CSV untuk backup atau database
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              {/* Scope & Format Options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Cakupan Data</label>
+                  <select
+                    value={exportScope}
+                    onChange={(e) => setExportScope(e.target.value as "current" | "all")}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden bg-slate-50 font-medium"
+                  >
+                    {selectedClass && (
+                      <option value="current">
+                        Hanya Kelas {selectedClass.code} ({currentClassSchedules.length} slot)
+                      </option>
+                    )}
+                    <option value="all">Semua Rombel Kelas ({displayClasses.length} Kelas)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Format File Ekspor</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExportFormat("json")}
+                      className={`px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                        exportFormat === "json"
+                          ? "bg-blue-50 border-[#0c3960] text-[#0c3960]"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <FileJson className="w-3.5 h-3.5" />
+                      <span>JSON</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExportFormat("sql")}
+                      className={`px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                        exportFormat === "sql"
+                          ? "bg-blue-50 border-[#0c3960] text-[#0c3960]"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <FileCode className="w-3.5 h-3.5" />
+                      <span>SQL</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExportFormat("csv")}
+                      className={`px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                        exportFormat === "csv"
+                          ? "bg-blue-50 border-[#0c3960] text-[#0c3960]"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>CSV</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Code Preview Box */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-slate-700">Pratinjau Data Ekspor</label>
+                  <button
+                    type="button"
+                    onClick={handleCopyExport}
+                    className="inline-flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-900 font-bold cursor-pointer"
+                  >
+                    {isExportCopied ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span className="text-emerald-600">Disalin!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Salin ke Clipboard</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <textarea
+                  readOnly
+                  rows={8}
+                  value={generateExportContent()}
+                  className="w-full p-3 font-mono text-[11px] bg-slate-900 text-emerald-400 rounded-xl border border-slate-700 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 text-xs">
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold cursor-pointer"
+              >
+                Tutup
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadExport}
+                  className="px-4 py-2 bg-[#0c3960] hover:bg-[#092b49] text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-xs transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh File {exportFormat.toUpperCase()}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: IMPOR JADWAL */}
+      {/* ========================================================================= */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center">
+                  <Upload className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Impor Jadwal Pelajaran</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Masukkan data dari file JSON atau CSV untuk mengisi jadwal secara otomatis
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Target Class & Mode */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Target Kelas</label>
+                  <select
+                    value={importTargetClassKey || currentClassKey}
+                    onChange={(e) => setImportTargetClassKey(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden bg-slate-50 font-medium"
+                  >
+                    {displayClasses.map((c) => (
+                      <option key={c.id} value={normalizeClassKey(c.code)}>
+                        Kelas {c.code} — {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Metode Pengisian</label>
+                  <select
+                    value={importMode}
+                    onChange={(e) => setImportMode(e.target.value as "replace" | "append")}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden bg-slate-50 font-medium"
+                  >
+                    <option value="replace">Timpa Seluruh Jadwal Kelas Ini</option>
+                    <option value="append">Gabungkan / Tambahkan ke Jadwal yang Ada</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Upload File and Sample Templates */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-700">Pilih File Jadwal (.json / .csv):</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadTemplate("json")}
+                      className="text-[11px] text-blue-700 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" /> Template JSON
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadTemplate("csv")}
+                      className="text-[11px] text-blue-700 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" /> Template CSV
+                    </button>
+                  </div>
+                </div>
+
+                <input
+                  type="file"
+                  accept=".json,.csv,.txt"
+                  onChange={handleFileUpload}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#0c3960] file:text-white hover:file:bg-[#092b49] cursor-pointer"
+                />
+              </div>
+
+              {/* Paste Raw Textarea */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Atau Tempel (Paste) Raw JSON / CSV di Bawah:
+                </label>
+                <textarea
+                  rows={4}
+                  value={importPasteText}
+                  onChange={(e) => handleParseImportText(e.target.value)}
+                  placeholder={`Contoh JSON:\n[\n  { "hari": "Senin", "jam": "07.00 - 08.20", "mapel": "Matematika", "guru": "Budi Santoso, M.Pd." }\n]`}
+                  className="w-full p-3 font-mono text-[11px] bg-white text-slate-800 rounded-xl border border-slate-300 focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden"
+                />
+              </div>
+
+              {/* Error Alert */}
+              {importError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              {/* Live Preview Table */}
+              {importParsedItems.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800">
+                      Pratinjau Hasil Impor ({importParsedItems.length} Slot Terdeteksi)
+                    </span>
+                    <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      Siap Dimasukkan
+                    </span>
+                  </div>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                        <tr>
+                          <th className="px-3 py-2 w-10 text-center">No</th>
+                          <th className="px-3 py-2">Hari</th>
+                          <th className="px-3 py-2">Jam</th>
+                          <th className="px-3 py-2">Mata Pelajaran</th>
+                          <th className="px-3 py-2">Guru Pengampu</th>
+                          <th className="px-3 py-2">Ruang</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {importParsedItems.map((slot, i) => (
+                          <tr key={i} className="hover:bg-slate-50/80">
+                            <td className="px-3 py-1.5 text-center text-slate-400 font-bold">{i + 1}</td>
+                            <td className="px-3 py-1.5 font-bold text-blue-900">{slot.day}</td>
+                            <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">{slot.time}</td>
+                            <td className="px-3 py-1.5 font-semibold text-slate-900">
+                              {slot.subject} <span className="text-[10px] text-slate-400 font-mono">({slot.code})</span>
+                            </td>
+                            <td className="px-3 py-1.5 text-slate-600">{slot.teacher}</td>
+                            <td className="px-3 py-1.5 text-slate-500">{slot.room}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 text-xs">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteImport}
+                disabled={isImporting || importParsedItems.length === 0}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-xs transition disabled:opacity-50"
+              >
+                {isImporting ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>Terapkan & Simpan ({importParsedItems.length} Slot)</span>
               </button>
             </div>
           </div>
