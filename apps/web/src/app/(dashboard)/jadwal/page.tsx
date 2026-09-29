@@ -3,1683 +3,1091 @@
 import * as React from "react";
 import {
   Clock,
-  CalendarDays,
-  BookOpen,
-  GraduationCap,
-  Shapes,
-  Plus,
-  PenSquare,
-  Trash2,
-  X,
-  AlertCircle,
-  CheckCircle2,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  Info,
-  Calendar,
-  AlertTriangle,
   Sparkles,
+  Plus,
+  ArrowLeft,
+  ArrowRight,
+  Pencil,
+  Trash2,
+  MapPin,
+  User,
+  Settings,
+  X,
+  Coffee,
+  CalendarDays,
+  Check,
+  AlertCircle,
 } from "lucide-react";
-import {
-  useSchedules,
-  useTodaySchedules,
-  useCreateSchedule,
-  useUpdateSchedule,
-  useDeleteSchedule,
-  useTeachingAssignments,
-  useCreateTeachingAssignment,
-  useUpdateTeachingAssignment,
-  useDeleteTeachingAssignment,
-} from "@/hooks/use-schedules";
+import { useSchedules } from "@/hooks/use-schedules";
 import { useTeachers } from "@/hooks/use-teachers";
 import { useClasses } from "@/hooks/use-classes";
 import { useSubjects } from "@/hooks/use-subjects";
 import { useAcademicYears } from "@/hooks/use-academic-years";
-import {
-  ScheduleItemDto,
-  TeachingAssignmentRecordDto,
-  TeacherRecordDto,
-  ClassDetailDto,
-  SubjectRecordDto,
-  AcademicYearRecordDto,
-} from "@komas/shared-types";
-import { ApiError } from "@/lib/api-client";
+import { ClassDetailDto } from "@komas/shared-types";
 
-const DAYS_OF_WEEK = [
-  { value: 1, label: "Senin", short: "Sen" },
-  { value: 2, label: "Selasa", short: "Sel" },
-  { value: 3, label: "Rabu", short: "Rab" },
-  { value: 4, label: "Kamis", short: "Kam" },
-  { value: 5, label: "Jumat", short: "Jum" },
-  { value: 6, label: "Sabtu", short: "Sab" },
-  { value: 7, label: "Minggu", short: "Min" },
+// Standard days of week for school schedule
+const DAYS_OF_WEEK = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
+
+// Map 1-7 numeric day to day name
+const DAY_MAP_NUM_TO_NAME: Record<number, string> = {
+  1: "Senin",
+  2: "Selasa",
+  3: "Rabu",
+  4: "Kamis",
+  5: "Jumat",
+  6: "Sabtu",
+  7: "Minggu",
+};
+
+export interface TimeSlot {
+  id: string;
+  time: string;
+  label: string;
+  isBreak: boolean;
+}
+
+export interface ScheduleSlotItem {
+  id: string | number;
+  day: string;
+  time: string;
+  jamLabel?: string;
+  subject: string;
+  code: string;
+  teacher: string;
+  room: string;
+}
+
+// Standard time slots matching AppSheet reference
+const DEFAULT_STANDARD_TIME_SLOTS: TimeSlot[] = [
+  { id: "slot-1", time: "07.00 - 08.20", label: "Jam 1-2", isBreak: false },
+  { id: "slot-2", time: "08.20 - 09.40", label: "Jam 3-4", isBreak: false },
+  { id: "slot-3", time: "09.40 - 10.00", label: "Istirahat 1", isBreak: true },
+  { id: "slot-4", time: "10.00 - 11.20", label: "Jam 5-6", isBreak: false },
+  { id: "slot-5", time: "11.20 - 12.00", label: "Istirahat 2 (Dzuhur)", isBreak: true },
+  { id: "slot-6", time: "12.00 - 13.20", label: "Jam 7-8", isBreak: false },
 ];
 
-export default function JadwalPage() {
-  // Tabs: 'schedules' | 'assignments' | 'today'
-  const [activeTab, setActiveTab] = React.useState<
-    "schedules" | "assignments" | "today"
-  >("schedules");
+// Default standard roster schedule for Class 7A (exact data from reference)
+const DEFAULT_7A_SCHEDULE: ScheduleSlotItem[] = [
+  { id: 1, day: "Senin", time: "07.00 - 08.20", jamLabel: "Jam 1-2", subject: "Bahasa Indonesia", code: "BIN", teacher: "Siti Rahmawati, S.Pd.", room: "Ruang 7A" },
+  { id: 2, day: "Senin", time: "08.20 - 09.40", jamLabel: "Jam 3-4", subject: "Matematika", code: "MTK", teacher: "Budi Santoso, M.Pd.", room: "Ruang 7A" },
+  { id: 3, day: "Senin", time: "10.00 - 11.20", jamLabel: "Jam 5-6", subject: "Ilmu Pengetahuan Alam (IPA)", code: "IPA", teacher: "Rina Marlina, S.Si.", room: "Lab IPA" },
+  { id: 4, day: "Senin", time: "12.00 - 13.20", jamLabel: "Jam 7-8", subject: "Pendidikan Agama Islam", code: "PAI", teacher: "Drs. H. Mulyadi", room: "Ruang 7A" },
 
-  // Global Filter State
-  const [selectedAcademicYearId, setSelectedAcademicYearId] =
-    React.useState<string>("ALL");
-  const [selectedTeacherId, setSelectedTeacherId] =
-    React.useState<string>("ALL");
-  const [selectedClassId, setSelectedClassId] = React.useState<string>("ALL");
-  const [selectedSubjectId, setSelectedSubjectId] =
-    React.useState<string>("ALL");
-  const [selectedDayOfWeek, setSelectedDayOfWeek] = React.useState<number>(0); // 0 = all
-  const [scheduleStatusFilter, setScheduleStatusFilter] = React.useState<
-    "ALL" | "ACTIVE" | "INACTIVE"
-  >("ALL");
+  { id: 5, day: "Selasa", time: "07.00 - 08.20", jamLabel: "Jam 1-2", subject: "Bahasa Inggris", code: "BIG", teacher: "Ahmad Fauzi, S.Pd.", room: "Ruang 7A" },
+  { id: 6, day: "Selasa", time: "08.20 - 09.40", jamLabel: "Jam 3-4", subject: "Pendidikan Jasmani (PJOK)", code: "PJOK", teacher: "Dedi Kurniawan, S.Pd.", room: "Lapangan Olahraga" },
+  { id: 7, day: "Selasa", time: "10.00 - 11.20", jamLabel: "Jam 5-6", subject: "Ilmu Pengetahuan Sosial (IPS)", code: "IPS", teacher: "Agus Salim, M.Pd.", room: "Ruang 7A" },
+  { id: 8, day: "Selasa", time: "12.00 - 13.20", jamLabel: "Jam 7-8", subject: "Informatika", code: "INF", teacher: "Eko Prasetyo, S.Kom.", room: "Lab Komputer" },
 
-  // Pagination
-  const [schedulePage, setSchedulePage] = React.useState(1);
-  const [assignmentPage, setAssignmentPage] = React.useState(1);
-  const [todayPage, setTodayPage] = React.useState(1);
-  const perPage = 20;
+  { id: 9, day: "Rabu", time: "07.00 - 08.20", jamLabel: "Jam 1-2", subject: "Matematika", code: "MTK", teacher: "Budi Santoso, M.Pd.", room: "Ruang 7A" },
+  { id: 10, day: "Rabu", time: "08.20 - 09.40", jamLabel: "Jam 3-4", subject: "Bahasa Indonesia", code: "BIN", teacher: "Siti Rahmawati, S.Pd.", room: "Ruang 7A" },
+  { id: 11, day: "Rabu", time: "10.00 - 11.20", jamLabel: "Jam 5-6", subject: "Pendidikan Pancasila (PPKn)", code: "PPKn", teacher: "Nurul Hidayah, M.Pd.", room: "Ruang 7A" },
+  { id: 12, day: "Rabu", time: "12.00 - 13.20", jamLabel: "Jam 7-8", subject: "Seni Budaya", code: "SNB", teacher: "Sri Wahyuningsih, S.Pd.", room: "Ruang Kesenian" },
 
-  // Options / Lookups
-  const { data: teachersData } = useTeachers({ per_page: 100 });
-  const teachers = teachersData?.data || [];
+  { id: 13, day: "Kamis", time: "07.00 - 08.20", jamLabel: "Jam 1-2", subject: "Ilmu Pengetahuan Alam (IPA)", code: "IPA", teacher: "Rina Marlina, S.Si.", room: "Lab IPA" },
+  { id: 14, day: "Kamis", time: "08.20 - 09.40", jamLabel: "Jam 3-4", subject: "Bahasa Inggris", code: "BIG", teacher: "Ahmad Fauzi, S.Pd.", room: "Ruang 7A" },
+  { id: 15, day: "Kamis", time: "10.00 - 11.20", jamLabel: "Jam 5-6", subject: "Prakarya", code: "PRA", teacher: "Ade Chandra, S.Sn.", room: "Ruang Prakarya" },
+  { id: 16, day: "Kamis", time: "12.00 - 13.20", jamLabel: "Jam 7-8", subject: "Ilmu Pengetahuan Sosial (IPS)", code: "IPS", teacher: "Agus Salim, M.Pd.", room: "Ruang 7A" },
+
+  { id: 17, day: "Jumat", time: "07.00 - 08.20", jamLabel: "Jam 1-2", subject: "Pendidikan Agama Islam", code: "PAI", teacher: "Drs. H. Mulyadi", room: "Ruang 7A" },
+  { id: 18, day: "Jumat", time: "08.20 - 09.40", jamLabel: "Jam 3-4", subject: "Bahasa Indonesia", code: "BIN", teacher: "Siti Rahmawati, S.Pd.", room: "Ruang 7A" },
+  { id: 19, day: "Jumat", time: "10.00 - 11.20", jamLabel: "Jam 5-6", subject: "Informatika", code: "INF", teacher: "Eko Prasetyo, S.Kom.", room: "Lab Komputer" },
+];
+
+function normalizeClassKey(str: string): string {
+  if (!str) return "";
+  return str.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeGrade(gradeOrCode: string): string {
+  if (!gradeOrCode) return "7";
+  const upper = gradeOrCode.toUpperCase().trim();
+  if (upper.startsWith("7") || upper.startsWith("VII")) return "7";
+  if (upper.startsWith("8") || upper.startsWith("VIII")) return "8";
+  if (upper.startsWith("9") || upper.startsWith("IX")) return "9";
+  return "7";
+}
+
+function formatTimeDisplay(timeStr: string): string {
+  if (!timeStr) return "";
+  // If HH:MM:SS, turn into HH.MM
+  const parts = timeStr.split(":");
+  if (parts.length >= 2) {
+    return `${parts[0]}.${parts[1]}`;
+  }
+  return timeStr.replace(":", ".");
+}
+
+export default function JadwalKelasPage() {
+  // Navigation Tiers: 1 = Pilih Jenjang (7, 8, 9), 2 = Pilih Rombel, 3 = Detail Roster Mingguan
+  const [currentTier, setCurrentTier] = React.useState<1 | 2 | 3>(1);
+  const [selectedTingkat, setSelectedTingkat] = React.useState<string>("7");
+  const [selectedClassId, setSelectedClassId] = React.useState<string>("");
+
+  // Modals
+  const [isSlotModalOpen, setIsSlotModalOpen] = React.useState(false);
+  const [isManageTimeModalOpen, setIsManageTimeModalOpen] = React.useState(false);
+  const [slotModalMode, setSlotModalMode] = React.useState<"add" | "edit">("add");
+  const [editingSlotId, setEditingSlotId] = React.useState<string | number | null>(null);
+
+  // Slot Form State
+  const [slotDay, setSlotDay] = React.useState("Senin");
+  const [slotTimeSelect, setSlotTimeSelect] = React.useState("07.00 - 08.20");
+  const [customStartTime, setCustomStartTime] = React.useState("07:00");
+  const [customEndTime, setCustomEndTime] = React.useState("08:20");
+  const [slotSubject, setSlotSubject] = React.useState("");
+  const [slotTeacher, setSlotTeacher] = React.useState("");
+  const [slotRoom, setSlotRoom] = React.useState("");
+
+  // Toast State
+  const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Queries
+  const { data: academicYearsData } = useAcademicYears({ per_page: 20 });
+  const activeYear = academicYearsData?.data.find((y) => y.active) || academicYearsData?.data[0];
 
   const { data: classesData } = useClasses({ per_page: 100 });
   const classes = classesData?.data || [];
 
+  const { data: teachersData } = useTeachers({ per_page: 100 });
+  const teachers = teachersData?.data || [];
+
   const { data: subjectsData } = useSubjects({ per_page: 100 });
   const subjects = subjectsData?.data || [];
 
-  const { data: academicYearsData } = useAcademicYears({ per_page: 50 });
-  const academicYears = academicYearsData?.data || [];
+  const { data: schedulesData } = useSchedules({ per_page: 300 });
+  const backendSchedules = schedulesData?.data || [];
 
-  // Set default active academic year if not yet selected
-  React.useEffect(() => {
-    if (selectedAcademicYearId === "ALL" && academicYears.length > 0) {
-      const activeYear = academicYears.find((ay) => ay.active);
-      if (activeYear) {
-        setSelectedAcademicYearId(activeYear.id);
+  // Local storage for time slots
+  const [standardTimeSlots, setStandardTimeSlots] = React.useState<TimeSlot[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("attendly_time_slots_v2");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.error("Failed to parse time slots from storage", e);
       }
     }
-  }, [academicYears, selectedAcademicYearId]);
+    return DEFAULT_STANDARD_TIME_SLOTS;
+  });
 
-  // Lookup Maps
-  const teacherMap = React.useMemo(() => {
-    const map = new Map<string, TeacherRecordDto>();
-    teachers.forEach((t) => {
-      map.set(t.id, t);
-      if (t.user_id) map.set(t.user_id, t);
+  const saveStandardTimeSlots = (slots: TimeSlot[]) => {
+    setStandardTimeSlots(slots);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("attendly_time_slots_v2", JSON.stringify(slots));
+    }
+  };
+
+  // Local schedules dictionary by class identifier (class.id or normalized code)
+  const [schedulesByClass, setSchedulesByClass] = React.useState<
+    Record<string, ScheduleSlotItem[]>
+  >(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("attendly_schedules_by_class_v2");
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.error("Failed to parse schedules from storage", e);
+      }
+    }
+    return {
+      "7a": DEFAULT_7A_SCHEDULE,
+    };
+  });
+
+  const saveSchedulesByClass = (data: Record<string, ScheduleSlotItem[]>) => {
+    setSchedulesByClass(data);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("attendly_schedules_by_class_v2", JSON.stringify(data));
+    }
+  };
+
+  // Sync / Merge backend schedules into schedulesByClass when backend data loads
+  React.useEffect(() => {
+    if (backendSchedules.length > 0 && classes.length > 0) {
+      setSchedulesByClass((prev) => {
+        const updated = { ...prev };
+        let hasChanges = false;
+
+        backendSchedules.forEach((bs) => {
+          const matchedClass = classes.find((c) => c.id === bs.class_id);
+          const classKey = matchedClass ? normalizeClassKey(matchedClass.code) : bs.class_id;
+
+          if (!updated[classKey]) {
+            updated[classKey] = [];
+          }
+
+          const dayName = DAY_MAP_NUM_TO_NAME[bs.day_of_week] || "Senin";
+          const formattedTime = `${formatTimeDisplay(bs.starts_at)} - ${formatTimeDisplay(bs.ends_at)}`;
+
+          const matchedSubject = subjects.find((s) => s.id === bs.subject_id);
+          const matchedTeacher = teachers.find((t) => t.id === bs.teacher_id);
+
+          const exists = updated[classKey].some(
+            (item) => item.day === dayName && item.time === formattedTime
+          );
+
+          if (!exists) {
+            hasChanges = true;
+            updated[classKey].push({
+              id: bs.id,
+              day: dayName,
+              time: formattedTime,
+              subject: matchedSubject?.name || "Mata Pelajaran",
+              code: matchedSubject?.code || "MPL",
+              teacher: matchedTeacher?.full_name || "Guru Pengampu",
+              room: matchedClass ? `Ruang ${matchedClass.code}` : "Ruang Kelas",
+            });
+          }
+        });
+
+        // Ensure default 7A schedule is always available if empty
+        if (!updated["7a"] || updated["7a"].length === 0) {
+          updated["7a"] = DEFAULT_7A_SCHEDULE;
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          saveSchedulesByClass(updated);
+        }
+        return updated;
+      });
+    }
+  }, [backendSchedules, classes, subjects, teachers]);
+
+  // Fallback classes if database has none
+  const displayClasses = React.useMemo(() => {
+    if (classes.length > 0) {
+      return classes;
+    }
+    // Generate fallback classes matching 7A-7F, 8A-8F, 9A-9F
+    const mock: ClassDetailDto[] = [];
+    ["7", "8", "9"].forEach((t) => {
+      ["A", "B", "C", "D", "E", "F"].forEach((sec) => {
+        mock.push({
+          id: `mock-${t}${sec.toLowerCase()}`,
+          code: `${t}${sec}`,
+          name: `Kelas ${t}${sec}`,
+          grade: t,
+          section: sec,
+          total_students: 32,
+          homeroom_teacher_name: sec === "A" ? "Budi Santoso, M.Pd." : "Siti Rahmawati, S.Pd.",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
     });
-    return map;
-  }, [teachers]);
-
-  const classMap = React.useMemo(() => {
-    const map = new Map<string, ClassDetailDto>();
-    classes.forEach((c) => map.set(c.id, c));
-    return map;
+    return mock;
   }, [classes]);
 
-  const subjectMap = React.useMemo(() => {
-    const map = new Map<string, SubjectRecordDto>();
-    subjects.forEach((s) => map.set(s.id, s));
-    return map;
-  }, [subjects]);
-
-  const academicYearMap = React.useMemo(() => {
-    const map = new Map<string, AcademicYearRecordDto>();
-    academicYears.forEach((ay) => map.set(ay.id, ay));
-    return map;
-  }, [academicYears]);
-
-  // Toast Notification
-  const [toastMessage, setToastMessage] = React.useState<string | null>(null);
-  const [toastType, setToastType] = React.useState<"success" | "error">(
-    "success"
-  );
-
-  const showToast = (
-    message: string,
-    type: "success" | "error" = "success"
-  ) => {
-    setToastMessage(message);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
-  };
-
-  // Queries
-  const {
-    data: assignmentsData,
-    isLoading: isAssignmentsLoading,
-    isError: isAssignmentsError,
-    error: assignmentsError,
-    refetch: refetchAssignments,
-    isFetching: isAssignmentsFetching,
-  } = useTeachingAssignments({
-    teacher_id: selectedTeacherId === "ALL" ? undefined : selectedTeacherId,
-    class_id: selectedClassId === "ALL" ? undefined : selectedClassId,
-    subject_id: selectedSubjectId === "ALL" ? undefined : selectedSubjectId,
-    academic_year_id:
-      selectedAcademicYearId === "ALL" ? undefined : selectedAcademicYearId,
-    page: assignmentPage,
-    per_page: perPage,
-  });
-
-  const assignments = assignmentsData?.data || [];
-  const assignmentMeta = assignmentsData?.meta;
-  const assignmentTotalPages = assignmentMeta?.total_pages || 1;
-
-  // Unfiltered active assignments for schedule creation dropdown
-  const { data: allAssignmentsData } = useTeachingAssignments({
-    academic_year_id:
-      selectedAcademicYearId === "ALL" ? undefined : selectedAcademicYearId,
-    page: 1,
-    per_page: 100,
-  });
-  const assignableList = allAssignmentsData?.data || [];
-
-  const assignmentLookupMap = React.useMemo(() => {
-    const map = new Map<string, TeachingAssignmentRecordDto>();
-    assignableList.forEach((a) => map.set(a.id, a));
-    assignments.forEach((a) => map.set(a.id, a));
-    return map;
-  }, [assignableList, assignments]);
-
-  const {
-    data: schedulesData,
-    isLoading: isSchedulesLoading,
-    isError: isSchedulesError,
-    error: schedulesError,
-    refetch: refetchSchedules,
-    isFetching: isSchedulesFetching,
-  } = useSchedules({
-    teacher_id: selectedTeacherId === "ALL" ? undefined : selectedTeacherId,
-    class_id: selectedClassId === "ALL" ? undefined : selectedClassId,
-    subject_id: selectedSubjectId === "ALL" ? undefined : selectedSubjectId,
-    academic_year_id:
-      selectedAcademicYearId === "ALL" ? undefined : selectedAcademicYearId,
-    day_of_week: selectedDayOfWeek > 0 ? selectedDayOfWeek : undefined,
-    active:
-      scheduleStatusFilter === "ALL"
-        ? undefined
-        : scheduleStatusFilter === "ACTIVE",
-    page: schedulePage,
-    per_page: perPage,
-  });
-
-  const schedules = schedulesData?.data || [];
-  const scheduleMeta = schedulesData?.meta;
-  const scheduleTotalPages = scheduleMeta?.total_pages || 1;
-
-  const {
-    data: todaySchedulesData,
-    isLoading: isTodayLoading,
-    isError: isTodayError,
-    error: todayError,
-    refetch: refetchToday,
-    isFetching: isTodayFetching,
-  } = useTodaySchedules(todayPage, perPage);
-
-  const todaySchedules = todaySchedulesData?.data || [];
-  const todayMeta = todaySchedulesData?.meta;
-  const todayTotalPages = todayMeta?.total_pages || 1;
-
-  // Mutations
-  const createAssignmentMutation = useCreateTeachingAssignment();
-  const updateAssignmentMutation = useUpdateTeachingAssignment();
-  const deleteAssignmentMutation = useDeleteTeachingAssignment();
-
-  const createScheduleMutation = useCreateSchedule();
-  const updateScheduleMutation = useUpdateSchedule();
-  const deleteScheduleMutation = useDeleteSchedule();
-
-  // Modal: Assignment (Create / Edit)
-  const [isAssignmentModalOpen, setIsAssignmentModalOpen] =
-    React.useState(false);
-  const [editingAssignment, setEditingAssignment] =
-    React.useState<TeachingAssignmentRecordDto | null>(null);
-  const [assignmentTeacherId, setAssignmentTeacherId] = React.useState("");
-  const [assignmentClassId, setAssignmentClassId] = React.useState("");
-  const [assignmentSubjectId, setAssignmentSubjectId] = React.useState("");
-  const [assignmentAcademicYearId, setAssignmentAcademicYearId] =
-    React.useState("");
-  const [assignmentModalError, setAssignmentModalError] = React.useState<
-    string | null
-  >(null);
-
-  // Modal: Delete Assignment
-  const [deletingAssignment, setDeletingAssignment] =
-    React.useState<TeachingAssignmentRecordDto | null>(null);
-  const [deleteAssignmentError, setDeleteAssignmentError] = React.useState<
-    string | null
-  >(null);
-
-  // Modal: Schedule (Create / Edit)
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = React.useState(false);
-  const [editingSchedule, setEditingSchedule] =
-    React.useState<ScheduleItemDto | null>(null);
-  const [scheduleAssignmentId, setScheduleAssignmentId] = React.useState("");
-  const [scheduleDayOfWeek, setScheduleDayOfWeek] = React.useState<number>(1);
-  const [scheduleStartsAt, setScheduleStartsAt] = React.useState("07:30");
-  const [scheduleEndsAt, setScheduleEndsAt] = React.useState("09:00");
-  const [scheduleEffectiveFrom, setScheduleEffectiveFrom] =
-    React.useState("");
-  const [scheduleEffectiveUntil, setScheduleEffectiveUntil] =
-    React.useState("");
-  const [scheduleModalError, setScheduleModalError] = React.useState<
-    string | null
-  >(null);
-
-  // Modal: Delete Schedule
-  const [deletingSchedule, setDeletingSchedule] =
-    React.useState<ScheduleItemDto | null>(null);
-  const [deleteScheduleError, setDeleteScheduleError] = React.useState<
-    string | null
-  >(null);
-
-  // Handlers for Assignment Modal
-  const openCreateAssignmentModal = () => {
-    setEditingAssignment(null);
-    setAssignmentTeacherId(
-      selectedTeacherId !== "ALL" ? selectedTeacherId : ""
+  // Active selected class object
+  const selectedClass = React.useMemo(() => {
+    if (!selectedClassId) return null;
+    return (
+      displayClasses.find(
+        (c) => c.id === selectedClassId || normalizeClassKey(c.code) === selectedClassId
+      ) || displayClasses[0]
     );
-    setAssignmentClassId(selectedClassId !== "ALL" ? selectedClassId : "");
-    setAssignmentSubjectId(
-      selectedSubjectId !== "ALL" ? selectedSubjectId : ""
-    );
-    setAssignmentAcademicYearId(
-      selectedAcademicYearId !== "ALL"
-        ? selectedAcademicYearId
-        : academicYears.find((ay) => ay.active)?.id || ""
-    );
-    setAssignmentModalError(null);
-    setIsAssignmentModalOpen(true);
-  };
+  }, [selectedClassId, displayClasses]);
 
-  const openEditAssignmentModal = (item: TeachingAssignmentRecordDto) => {
-    setEditingAssignment(item);
-    setAssignmentTeacherId(item.teacher_id);
-    setAssignmentClassId(item.class_id);
-    setAssignmentSubjectId(item.subject_id);
-    setAssignmentAcademicYearId(item.academic_year_id);
-    setAssignmentModalError(null);
-    setIsAssignmentModalOpen(true);
-  };
+  // Schedules for currently selected class
+  const currentClassKey = selectedClass
+    ? normalizeClassKey(selectedClass.code)
+    : "7a";
 
-  const handleSaveAssignment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAssignmentModalError(null);
+  const currentClassSchedules = schedulesByClass[currentClassKey] || [];
 
-    if (!assignmentTeacherId) {
-      setAssignmentModalError("Guru pengampu wajib dipilih.");
-      return;
-    }
-    if (!assignmentClassId) {
-      setAssignmentModalError("Kelas wajib dipilih.");
-      return;
-    }
-    if (!assignmentSubjectId) {
-      setAssignmentModalError("Mata pelajaran wajib dipilih.");
-      return;
-    }
-    if (!assignmentAcademicYearId) {
-      setAssignmentModalError("Tahun ajaran wajib dipilih.");
-      return;
-    }
-
-    try {
-      if (editingAssignment) {
-        await updateAssignmentMutation.mutateAsync({
-          id: editingAssignment.id,
-          data: {
-            teacher_id: assignmentTeacherId,
-            class_id: assignmentClassId,
-            subject_id: assignmentSubjectId,
-            academic_year_id: assignmentAcademicYearId,
-          },
-        });
-        showToast("Penugasan mengajar berhasil diperbarui.");
+  // Group classes by Tingkat (7, 8, 9)
+  const classesByTingkat = React.useMemo(() => {
+    const map: Record<string, ClassDetailDto[]> = { "7": [], "8": [], "9": [] };
+    displayClasses.forEach((c) => {
+      const g = normalizeGrade(c.grade || c.code);
+      if (map[g]) {
+        map[g].push(c);
       } else {
-        await createAssignmentMutation.mutateAsync({
-          teacher_id: assignmentTeacherId,
-          class_id: assignmentClassId,
-          subject_id: assignmentSubjectId,
-          academic_year_id: assignmentAcademicYearId,
-        });
-        showToast("Penugasan mengajar berhasil ditambahkan.");
+        map["7"].push(c);
       }
-      setIsAssignmentModalOpen(false);
-    } catch (err: any) {
-      if (err instanceof ApiError) {
-        if (err.code === "CONFLICT") {
-          setAssignmentModalError(
-            "Konflik Penugasan: Penugasan guru, kelas, mapel, dan tahun ajaran ini sudah terdaftar atau terdapat riwayat aktif."
-          );
-        } else if (err.code === "VALIDATION_ERROR") {
-          setAssignmentModalError(
-            err.message ||
-              "Data tidak valid. Pastikan guru, kelas, mapel, dan tahun ajaran dalam status aktif."
-          );
-        } else {
-          setAssignmentModalError(err.message);
+    });
+    return map;
+  }, [displayClasses]);
+
+  // Dynamic time slots that includes all standard slots plus any custom ones from currentClassSchedules
+  const allRowSlots = React.useMemo(() => {
+    const list = [...standardTimeSlots];
+    currentClassSchedules.forEach((s) => {
+      if (!list.some((slot) => slot.time === s.time)) {
+        list.push({
+          id: `custom-${s.time.replace(/[^a-zA-Z0-9]/g, "-")}`,
+          time: s.time,
+          label: s.jamLabel || "Jam Khusus",
+          isBreak: false,
+        });
+      }
+    });
+    return list;
+  }, [standardTimeSlots, currentClassSchedules]);
+
+  // Handlers for Navigation
+  const handleOpenTingkat = (tingkat: string) => {
+    setSelectedTingkat(tingkat);
+    setCurrentTier(2);
+  };
+
+  const handleOpenRoster = (cls: ClassDetailDto) => {
+    setSelectedClassId(cls.id);
+    setSelectedTingkat(normalizeGrade(cls.grade || cls.code));
+    setCurrentTier(3);
+  };
+
+  const handleBackToTingkat = () => {
+    setCurrentTier(1);
+  };
+
+  const handleBackToRombel = () => {
+    setCurrentTier(2);
+  };
+
+  // Generate Default Jadwal for current class
+  const handleGenerateDefaultJadwal = () => {
+    if (!selectedClass) return;
+    const classCode = selectedClass.code;
+
+    const kbmSlots = standardTimeSlots.filter((s) => !s.isBreak);
+    const slot1 = kbmSlots[0]?.time || "07.00 - 08.20";
+    const slot2 = kbmSlots[1]?.time || "08.20 - 09.40";
+    const slot3 = kbmSlots[2]?.time || "10.00 - 11.20";
+    const slot4 = kbmSlots[3]?.time || "12.00 - 13.20";
+
+    const defaultRoster: ScheduleSlotItem[] = [
+      { id: Date.now() + 1, day: "Senin", time: slot1, subject: "Bahasa Indonesia", code: "BIN", teacher: "Siti Rahmawati, S.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 2, day: "Senin", time: slot2, subject: "Matematika", code: "MTK", teacher: "Budi Santoso, M.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 3, day: "Senin", time: slot3, subject: "Ilmu Pengetahuan Alam (IPA)", code: "IPA", teacher: "Rina Marlina, S.Si.", room: "Lab IPA" },
+      { id: Date.now() + 4, day: "Senin", time: slot4, subject: "Pendidikan Agama Islam", code: "PAI", teacher: "Drs. H. Mulyadi", room: `Ruang ${classCode}` },
+
+      { id: Date.now() + 5, day: "Selasa", time: slot1, subject: "Bahasa Inggris", code: "BIG", teacher: "Ahmad Fauzi, S.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 6, day: "Selasa", time: slot2, subject: "Pendidikan Jasmani (PJOK)", code: "PJOK", teacher: "Dedi Kurniawan, S.Pd.", room: "Lapangan Olahraga" },
+      { id: Date.now() + 7, day: "Selasa", time: slot3, subject: "Ilmu Pengetahuan Sosial (IPS)", code: "IPS", teacher: "Agus Salim, M.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 8, day: "Selasa", time: slot4, subject: "Informatika", code: "INF", teacher: "Eko Prasetyo, S.Kom.", room: "Lab Komputer" },
+
+      { id: Date.now() + 9, day: "Rabu", time: slot1, subject: "Matematika", code: "MTK", teacher: "Budi Santoso, M.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 10, day: "Rabu", time: slot2, subject: "Bahasa Indonesia", code: "BIN", teacher: "Siti Rahmawati, S.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 11, day: "Rabu", time: slot3, subject: "Pendidikan Pancasila (PPKn)", code: "PPKn", teacher: "Nurul Hidayah, M.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 12, day: "Rabu", time: slot4, subject: "Seni Budaya", code: "SNB", teacher: "Sri Wahyuningsih, S.Pd.", room: "Ruang Kesenian" },
+
+      { id: Date.now() + 13, day: "Kamis", time: slot1, subject: "Ilmu Pengetahuan Alam (IPA)", code: "IPA", teacher: "Rina Marlina, S.Si.", room: "Lab IPA" },
+      { id: Date.now() + 14, day: "Kamis", time: slot2, subject: "Bahasa Inggris", code: "BIG", teacher: "Ahmad Fauzi, S.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 15, day: "Kamis", time: slot3, subject: "Prakarya", code: "PRA", teacher: "Ade Chandra, S.Sn.", room: "Ruang Prakarya" },
+      { id: Date.now() + 16, day: "Kamis", time: slot4, subject: "Ilmu Pengetahuan Sosial (IPS)", code: "IPS", teacher: "Agus Salim, M.Pd.", room: `Ruang ${classCode}` },
+
+      { id: Date.now() + 17, day: "Jumat", time: slot1, subject: "Pendidikan Agama Islam", code: "PAI", teacher: "Drs. H. Mulyadi", room: `Ruang ${classCode}` },
+      { id: Date.now() + 18, day: "Jumat", time: slot2, subject: "Bahasa Indonesia", code: "BIN", teacher: "Siti Rahmawati, S.Pd.", room: `Ruang ${classCode}` },
+      { id: Date.now() + 19, day: "Jumat", time: slot3, subject: "Informatika", code: "INF", teacher: "Eko Prasetyo, S.Kom.", room: "Lab Komputer" },
+    ];
+
+    const updated = {
+      ...schedulesByClass,
+      [currentClassKey]: defaultRoster,
+    };
+    saveSchedulesByClass(updated);
+    showToast(`Jadwal standar berhasil dimuat untuk ${selectedClass.name}`);
+  };
+
+  // Open Modal Slot
+  const handleOpenAddSlot = (presetDay?: string, presetTime?: string) => {
+    setSlotModalMode("add");
+    setEditingSlotId(null);
+    setSlotDay(presetDay || "Senin");
+    setSlotTimeSelect(presetTime || standardTimeSlots[0]?.time || "07.00 - 08.20");
+
+    const defaultSubject = subjects[0]?.name || "Bahasa Indonesia";
+    setSlotSubject(defaultSubject);
+    setSlotTeacher(teachers[0]?.full_name || "Siti Rahmawati, S.Pd.");
+    setSlotRoom(selectedClass ? `Ruang ${selectedClass.code}` : "Ruang Kelas");
+
+    setIsSlotModalOpen(true);
+  };
+
+  const handleOpenEditSlot = (slot: ScheduleSlotItem) => {
+    setSlotModalMode("edit");
+    setEditingSlotId(slot.id);
+    setSlotDay(slot.day);
+
+    const matchesPreset = standardTimeSlots.some((s) => s.time === slot.time);
+    if (matchesPreset) {
+      setSlotTimeSelect(slot.time);
+    } else {
+      setSlotTimeSelect("__custom__");
+      const parts = slot.time.split("-").map((p) => p.trim().replace(".", ":"));
+      setCustomStartTime(parts[0] || "07:00");
+      setCustomEndTime(parts[1] || "08:20");
+    }
+
+    setSlotSubject(slot.subject);
+    setSlotTeacher(slot.teacher);
+    setSlotRoom(slot.room);
+
+    setIsSlotModalOpen(true);
+  };
+
+  const handleDeleteSlot = (slotId: string | number) => {
+    if (!confirm("Hapus slot mata pelajaran ini dari jadwal?")) return;
+    const filtered = currentClassSchedules.filter((s) => s.id !== slotId);
+    const updated = {
+      ...schedulesByClass,
+      [currentClassKey]: filtered,
+    };
+    saveSchedulesByClass(updated);
+    showToast("Slot jadwal berhasil dihapus");
+  };
+
+  const handleSaveSlot = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    let finalTime = slotTimeSelect;
+    if (slotTimeSelect === "__custom__") {
+      if (!customStartTime || !customEndTime) {
+        alert("Silakan lengkapi jam mulai dan selesai");
+        return;
+      }
+      finalTime = `${customStartTime.replace(":", ".")} - ${customEndTime.replace(":", ".")}`;
+    }
+
+    const matchedSub = subjects.find((s) => s.name === slotSubject);
+    const subCode = matchedSub ? matchedSub.code : slotSubject.substring(0, 3).toUpperCase();
+
+    let updatedList = [...currentClassSchedules];
+
+    if (slotModalMode === "edit" && editingSlotId) {
+      updatedList = updatedList.map((s) => {
+        if (s.id === editingSlotId) {
+          return {
+            ...s,
+            day: slotDay,
+            time: finalTime,
+            subject: slotSubject,
+            code: subCode,
+            teacher: slotTeacher,
+            room: slotRoom || (selectedClass ? `Ruang ${selectedClass.code}` : "Ruang Kelas"),
+          };
         }
-      } else {
-        setAssignmentModalError("Terjadi kesalahan saat menyimpan penugasan.");
-      }
-    }
-  };
-
-  const handleDeleteAssignment = async () => {
-    if (!deletingAssignment) return;
-    setDeleteAssignmentError(null);
-    try {
-      await deleteAssignmentMutation.mutateAsync(deletingAssignment.id);
-      showToast("Penugasan mengajar berhasil dinonaktifkan.");
-      setDeletingAssignment(null);
-    } catch (err: any) {
-      if (err instanceof ApiError) {
-        setDeleteAssignmentError(err.message);
-      } else {
-        setDeleteAssignmentError("Gagal menonaktifkan penugasan mengajar.");
-      }
-    }
-  };
-
-  // Handlers for Schedule Modal
-  const openCreateScheduleModal = () => {
-    setEditingSchedule(null);
-    setScheduleAssignmentId("");
-    setScheduleDayOfWeek(selectedDayOfWeek > 0 ? selectedDayOfWeek : 1);
-    setScheduleStartsAt("07:30");
-    setScheduleEndsAt("09:00");
-
-    // Default effective from: today or start of current academic year
-    const activeYear = academicYears.find(
-      (ay) => ay.id === selectedAcademicYearId || ay.active
-    );
-    const todayStr = new Date().toISOString().split("T")[0];
-    setScheduleEffectiveFrom(activeYear?.starts_on || todayStr);
-    setScheduleEffectiveUntil(activeYear?.ends_on || "");
-    setScheduleModalError(null);
-    setIsScheduleModalOpen(true);
-  };
-
-  const openEditScheduleModal = (item: ScheduleItemDto) => {
-    setEditingSchedule(item);
-    setScheduleAssignmentId(item.teaching_assignment_id);
-    setScheduleDayOfWeek(item.day_of_week);
-    setScheduleStartsAt(item.starts_at.slice(0, 5));
-    setScheduleEndsAt(item.ends_at.slice(0, 5));
-    setScheduleEffectiveFrom(item.effective_from);
-    setScheduleEffectiveUntil(item.effective_until || "");
-    setScheduleModalError(null);
-    setIsScheduleModalOpen(true);
-  };
-
-  const handleSaveSchedule = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setScheduleModalError(null);
-
-    if (!scheduleAssignmentId) {
-      setScheduleModalError("Penugasan mengajar wajib dipilih.");
-      return;
-    }
-    if (!scheduleStartsAt || !scheduleEndsAt) {
-      setScheduleModalError("Jam mulai dan selesai wajib diisi.");
-      return;
-    }
-    if (scheduleStartsAt >= scheduleEndsAt) {
-      setScheduleModalError("Jam selesai harus lebih akhir dari jam mulai.");
-      return;
-    }
-    if (!scheduleEffectiveFrom) {
-      setScheduleModalError("Tanggal mulai berlaku wajib diisi.");
-      return;
-    }
-    if (
-      scheduleEffectiveUntil &&
-      scheduleEffectiveUntil < scheduleEffectiveFrom
-    ) {
-      setScheduleModalError(
-        "Tanggal berakhir harus setelah atau sama dengan tanggal mulai."
+        return s;
+      });
+      showToast("Slot jadwal berhasil diperbarui");
+    } else {
+      // Add new
+      // Remove conflict if any on same day and time
+      updatedList = updatedList.filter(
+        (s) => !(s.day === slotDay && s.time === finalTime)
       );
-      return;
+
+      updatedList.push({
+        id: Date.now(),
+        day: slotDay,
+        time: finalTime,
+        subject: slotSubject,
+        code: subCode,
+        teacher: slotTeacher,
+        room: slotRoom || (selectedClass ? `Ruang ${selectedClass.code}` : "Ruang Kelas"),
+      });
+      showToast(`Slot ${slotSubject} hari ${slotDay} berhasil disimpan`);
     }
 
-    try {
-      if (editingSchedule) {
-        await updateScheduleMutation.mutateAsync({
-          id: editingSchedule.id,
-          data: {
-            teaching_assignment_id: scheduleAssignmentId,
-            day_of_week: scheduleDayOfWeek,
-            starts_at: scheduleStartsAt,
-            ends_at: scheduleEndsAt,
-            effective_from: scheduleEffectiveFrom,
-            effective_until: scheduleEffectiveUntil || null,
-          },
-        });
-        showToast("Jadwal kelas berhasil diperbarui.");
-      } else {
-        await createScheduleMutation.mutateAsync({
-          teaching_assignment_id: scheduleAssignmentId,
-          day_of_week: scheduleDayOfWeek,
-          starts_at: scheduleStartsAt,
-          ends_at: scheduleEndsAt,
-          effective_from: scheduleEffectiveFrom,
-          effective_until: scheduleEffectiveUntil || null,
-        });
-        showToast("Jadwal kelas berhasil ditambahkan.");
-      }
-      setIsScheduleModalOpen(false);
-    } catch (err: any) {
-      if (err instanceof ApiError) {
-        if (err.code === "CONFLICT") {
-          setScheduleModalError(
-            "Konflik Jadwal: Guru atau kelas sudah memiliki jadwal mengajar pada hari dan rentang jam yang sama."
-          );
-        } else if (err.code === "VALIDATION_ERROR") {
-          setScheduleModalError(
-            err.message ||
-              "Data jadwal tidak valid. Pastikan rentang jam dan tanggal sesuai periode tahun ajaran."
-          );
-        } else {
-          setScheduleModalError(err.message);
-        }
-      } else {
-        setScheduleModalError("Terjadi kesalahan saat menyimpan jadwal.");
-      }
-    }
-  };
-
-  const handleDeleteSchedule = async () => {
-    if (!deletingSchedule) return;
-    setDeleteScheduleError(null);
-    try {
-      await deleteScheduleMutation.mutateAsync(deletingSchedule.id);
-      showToast("Jadwal kelas berhasil dinonaktifkan.");
-      setDeletingSchedule(null);
-    } catch (err: any) {
-      if (err instanceof ApiError) {
-        setDeleteScheduleError(err.message);
-      } else {
-        setDeleteScheduleError("Gagal menonaktifkan jadwal.");
-      }
-    }
-  };
-
-  // Helper formatting functions
-  const formatDayName = (dayNumber: number) => {
-    return DAYS_OF_WEEK.find((d) => d.value === dayNumber)?.label || `Hari ${dayNumber}`;
-  };
-
-  const formatTime = (timeStr: string) => {
-    if (!timeStr) return "-";
-    return timeStr.slice(0, 5);
+    const updated = {
+      ...schedulesByClass,
+      [currentClassKey]: updatedList,
+    };
+    saveSchedulesByClass(updated);
+    setIsSlotModalOpen(false);
   };
 
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-sm animate-in fade-in slide-in-from-top-4 duration-300 ${
-            toastType === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-rose-50 border-rose-200 text-rose-800"
-          }`}
-        >
-          {toastType === "success" ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-          )}
-          <span className="font-medium">{toastMessage}</span>
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-[#0c3960] text-white px-4 py-3 rounded-xl shadow-xl text-xs font-semibold animate-in slide-in-from-bottom duration-200">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Clock className="w-7 h-7 text-[#0c3960]" />
-            Jadwal & Penugasan Mengajar
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Kelola jadwal pelajaran kelas berulang dan penugasan guru per mata
-            pelajaran serta tahun ajaran.
-          </p>
-        </div>
-
-        {/* Action Button */}
-        <div className="flex items-center gap-2">
-          {activeTab === "schedules" && (
-            <button
-              onClick={openCreateScheduleModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0c3960] hover:bg-[#092b49] text-white rounded-xl text-sm font-semibold shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Tambah Jadwal
-            </button>
-          )}
-          {activeTab === "assignments" && (
-            <button
-              onClick={openCreateAssignmentModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0c3960] hover:bg-[#092b49] text-white rounded-xl text-sm font-semibold shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Tambah Penugasan
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-1 bg-slate-50/50 p-1 rounded-xl">
-        <button
-          onClick={() => setActiveTab("schedules")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-            activeTab === "schedules"
-              ? "bg-white text-[#0c3960] shadow-xs"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          Jadwal Pelajaran
-          {scheduleMeta?.total !== undefined && (
-            <span
-              className={`px-2 py-0.5 text-xs rounded-full ${
-                activeTab === "schedules"
-                  ? "bg-[#0c3960]/10 text-[#0c3960]"
-                  : "bg-slate-200 text-slate-600"
-              }`}
-            >
-              {scheduleMeta.total}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab("assignments")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-            activeTab === "assignments"
-              ? "bg-white text-[#0c3960] shadow-xs"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-          }`}
-        >
-          <GraduationCap className="w-4 h-4" />
-          Penugasan Guru
-          {assignmentMeta?.total !== undefined && (
-            <span
-              className={`px-2 py-0.5 text-xs rounded-full ${
-                activeTab === "assignments"
-                  ? "bg-[#0c3960]/10 text-[#0c3960]"
-                  : "bg-slate-200 text-slate-600"
-              }`}
-            >
-              {assignmentMeta.total}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab("today")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-            activeTab === "today"
-              ? "bg-white text-emerald-800 shadow-xs"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-          }`}
-        >
-          <Sparkles className="w-4 h-4 text-emerald-600" />
-          Jadwal Hari Ini
-          {todayMeta?.total !== undefined && (
-            <span
-              className={`px-2 py-0.5 text-xs rounded-full ${
-                activeTab === "today"
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-slate-200 text-slate-600"
-              }`}
-            >
-              {todayMeta.total}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Filter Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Filter: Academic Year */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
-              Tahun Ajaran
-            </label>
-            <select
-              value={selectedAcademicYearId}
-              onChange={(e) => {
-                setSelectedAcademicYearId(e.target.value);
-                setSchedulePage(1);
-                setAssignmentPage(1);
-              }}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-            >
-              <option value="ALL">Semua Tahun Ajaran</option>
-              {academicYears.map((ay) => (
-                <option key={ay.id} value={ay.id}>
-                  {ay.name} - Smst {ay.semester} {ay.active ? "(Aktif)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter: Guru */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
-              Guru Pengampu
-            </label>
-            <select
-              value={selectedTeacherId}
-              onChange={(e) => {
-                setSelectedTeacherId(e.target.value);
-                setSchedulePage(1);
-                setAssignmentPage(1);
-              }}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-            >
-              <option value="ALL">Semua Guru</option>
-              {teachers.map((t) => (
-                <option key={t.id} value={t.user_id || t.id}>
-                  {t.full_name} ({t.nip})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter: Kelas */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
-              Kelas
-            </label>
-            <select
-              value={selectedClassId}
-              onChange={(e) => {
-                setSelectedClassId(e.target.value);
-                setSchedulePage(1);
-                setAssignmentPage(1);
-              }}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-            >
-              <option value="ALL">Semua Kelas</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter: Mapel */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
-              Mata Pelajaran
-            </label>
-            <select
-              value={selectedSubjectId}
-              onChange={(e) => {
-                setSelectedSubjectId(e.target.value);
-                setSchedulePage(1);
-                setAssignmentPage(1);
-              }}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-            >
-              <option value="ALL">Semua Mapel</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Tab-Specific Secondary Filters */}
-        {activeTab === "schedules" && (
-          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-              <span>Hari:</span>
-              <div className="flex flex-wrap gap-1">
-                <button
-                  onClick={() => {
-                    setSelectedDayOfWeek(0);
-                    setSchedulePage(1);
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-                    selectedDayOfWeek === 0
-                      ? "bg-[#0c3960] text-white"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  Semua
-                </button>
-                {DAYS_OF_WEEK.map((d) => (
-                  <button
-                    key={d.value}
-                    onClick={() => {
-                      setSelectedDayOfWeek(d.value);
-                      setSchedulePage(1);
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
-                      selectedDayOfWeek === d.value
-                        ? "bg-[#0c3960] text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-slate-600 font-medium">Status:</span>
-              <select
-                value={scheduleStatusFilter}
-                onChange={(e) => {
-                  setScheduleStatusFilter(
-                    e.target.value as "ALL" | "ACTIVE" | "INACTIVE"
-                  );
-                  setSchedulePage(1);
-                }}
-                className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
-              >
-                <option value="ALL">Semua Status</option>
-                <option value="ACTIVE">Aktif</option>
-                <option value="INACTIVE">Nonaktif</option>
-              </select>
-
-              {(selectedAcademicYearId !== "ALL" ||
-                selectedTeacherId !== "ALL" ||
-                selectedClassId !== "ALL" ||
-                selectedSubjectId !== "ALL" ||
-                selectedDayOfWeek !== 0 ||
-                scheduleStatusFilter !== "ALL") && (
-                <button
-                  onClick={() => {
-                    setSelectedTeacherId("ALL");
-                    setSelectedClassId("ALL");
-                    setSelectedSubjectId("ALL");
-                    setSelectedDayOfWeek(0);
-                    setScheduleStatusFilter("ALL");
-                    setSchedulePage(1);
-                  }}
-                  className="text-xs text-rose-600 hover:text-rose-800 font-medium cursor-pointer px-2 py-1"
-                >
-                  Reset Filter
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Tab 1: Jadwal Pelajaran (Schedules) */}
-      {activeTab === "schedules" && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          {/* Table Header / Action status */}
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-slate-800 text-sm">
-                Daftar Jadwal Kelas Berulang
-              </h2>
-              {isSchedulesFetching && (
-                <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
-              )}
-            </div>
-            <span className="text-xs text-slate-500">
-              Menampilkan {schedules.length} dari {scheduleMeta?.total || 0}{" "}
-              jadwal
-            </span>
-          </div>
-
-          {/* Table Content */}
-          {isSchedulesLoading ? (
-            <div className="p-8 text-center">
-              <RefreshCw className="w-6 h-6 text-[#0c3960] animate-spin mx-auto mb-2" />
-              <p className="text-xs text-slate-500">Memuat jadwal kelas...</p>
-            </div>
-          ) : isSchedulesError ? (
-            <div className="p-8 text-center">
-              <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-800">
-                Gagal memuat jadwal kelas
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {(schedulesError as any)?.message || "Terjadi kesalahan server"}
-              </p>
-              <button
-                onClick={() => refetchSchedules()}
-                className="mt-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
-              >
-                Coba Lagi
-              </button>
-            </div>
-          ) : schedules.length === 0 ? (
-            <div className="p-12 text-center">
-              <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-slate-700">
-                Belum ada jadwal kelas
+      {/* ========================================================================= */}
+      {/* TIER 1: PILIH JENJANG / TINGKAT JADWAL (7, 8, 9) */}
+      {/* ========================================================================= */}
+      {currentTier === 1 && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          {/* Header Banner */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Pilih Jenjang / Tingkat Jadwal
               </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Tambahkan jadwal pelajaran kelas berulang berdasarkan penugasan
-                guru yang aktif.
+              <p className="text-xs text-slate-500 mt-0.5">
+                Pilih tingkat 7, 8, atau 9 untuk melihat dan mengelola jadwal pelajaran roster mingguan (Senin s/d Jumat).
               </p>
-              <button
-                onClick={openCreateScheduleModal}
-                className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0c3960] text-white rounded-xl text-xs font-semibold hover:bg-[#092b49] cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Tambah Jadwal Pertama
-              </button>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
-                <thead className="bg-slate-50/75 border-b border-slate-200 text-slate-700 uppercase font-semibold text-[11px] tracking-wider">
-                  <tr>
-                    <th className="px-4 py-3">Hari & Jam</th>
-                    <th className="px-4 py-3">Kelas</th>
-                    <th className="px-4 py-3">Mata Pelajaran</th>
-                    <th className="px-4 py-3">Guru Pengampu</th>
-                    <th className="px-4 py-3">Masa Berlaku</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {schedules.map((schedule) => {
-                    const cls = classMap.get(schedule.class_id);
-                    const subj = subjectMap.get(schedule.subject_id);
-                    const teacher = teacherMap.get(schedule.teacher_id);
-                    const ay = academicYearMap.get(schedule.academic_year_id);
-
-                    return (
-                      <tr
-                        key={schedule.id}
-                        className="hover:bg-slate-50/50 transition-colors"
-                      >
-                        {/* Hari & Jam */}
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-slate-100 text-slate-800">
-                              {formatDayName(schedule.day_of_week)}
-                            </span>
-                            <span className="font-semibold text-slate-900 font-mono">
-                              {formatTime(schedule.starts_at)} -{" "}
-                              {formatTime(schedule.ends_at)}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Kelas */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {cls ? cls.name : "Kelas"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {cls?.code || "-"}
-                          </div>
-                        </td>
-
-                        {/* Mata Pelajaran */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {subj ? subj.name : "Mata Pelajaran"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {subj?.code || "-"}
-                          </div>
-                        </td>
-
-                        {/* Guru */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {teacher ? teacher.full_name : "Guru"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            NIP: {teacher?.nip || "-"}
-                          </div>
-                        </td>
-
-                        {/* Masa Berlaku */}
-                        <td className="px-4 py-3.5 text-slate-600">
-                          <div>Mulai: {schedule.effective_from}</div>
-                          <div className="text-[11px] text-slate-500">
-                            Sampai: {schedule.effective_until || "Seterusnya"}
-                          </div>
-                          {ay && (
-                            <div className="text-[10px] text-slate-400">
-                              TA: {ay.name} (S{ay.semester})
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-4 py-3.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                              schedule.active
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-slate-100 text-slate-600 border border-slate-200"
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                schedule.active
-                                  ? "bg-emerald-500"
-                                  : "bg-slate-400"
-                              }`}
-                            />
-                            {schedule.active ? "Aktif" : "Nonaktif"}
-                          </span>
-                        </td>
-
-                        {/* Aksi */}
-                        <td className="px-4 py-3.5 text-right space-x-1">
-                          <button
-                            onClick={() => openEditScheduleModal(schedule)}
-                            className="p-1.5 text-slate-500 hover:text-[#0c3960] hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                            title="Edit Jadwal"
-                          >
-                            <PenSquare className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeletingSchedule(schedule);
-                              setDeleteScheduleError(null);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            title="Nonaktifkan Jadwal"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {scheduleTotalPages > 1 && (
-            <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <span className="text-xs text-slate-500">
-                Halaman {schedulePage} dari {scheduleTotalPages}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  disabled={schedulePage <= 1}
-                  onClick={() => setSchedulePage((p) => Math.max(p - 1, 1))}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  disabled={schedulePage >= scheduleTotalPages}
-                  onClick={() =>
-                    setSchedulePage((p) => Math.min(p + 1, scheduleTotalPages))
-                  }
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab 2: Penugasan Guru (Teaching Assignments) */}
-      {activeTab === "assignments" && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-slate-800 text-sm">
-                Daftar Penugasan Mengajar Guru
-              </h2>
-              {isAssignmentsFetching && (
-                <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
-              )}
-            </div>
-            <span className="text-xs text-slate-500">
-              Menampilkan {assignments.length} dari{" "}
-              {assignmentMeta?.total || 0} penugasan
+            <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-2 rounded-xl self-start sm:self-auto">
+              {activeYear ? `Tahun Ajaran ${activeYear.name}` : "Tahun Ajaran 2026/2027"}
             </span>
           </div>
 
-          {isAssignmentsLoading ? (
-            <div className="p-8 text-center">
-              <RefreshCw className="w-6 h-6 text-[#0c3960] animate-spin mx-auto mb-2" />
-              <p className="text-xs text-slate-500">Memuat data penugasan...</p>
-            </div>
-          ) : isAssignmentsError ? (
-            <div className="p-8 text-center">
-              <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-800">
-                Gagal memuat penugasan mengajar
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {(assignmentsError as any)?.message ||
-                  "Terjadi kesalahan server"}
-              </p>
-              <button
-                onClick={() => refetchAssignments()}
-                className="mt-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
+          {/* Cards Tingkat 7, 8, 9 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[
+              {
+                tingkat: "7",
+                title: "Tingkat 7 (Fase D)",
+                desc:
+                  classesByTingkat["7"].length > 0
+                    ? `Kelas ${classesByTingkat["7"][0]?.code} s/d ${classesByTingkat["7"][classesByTingkat["7"].length - 1]?.code} • Roster Kurikulum Merdeka`
+                    : "Belum ada rombel kelas",
+                totalRombel: classesByTingkat["7"].length,
+                jamPekan: "40 Jam / Pekan",
+              },
+              {
+                tingkat: "8",
+                title: "Tingkat 8 (Fase D)",
+                desc:
+                  classesByTingkat["8"].length > 0
+                    ? `Kelas ${classesByTingkat["8"][0]?.code} s/d ${classesByTingkat["8"][classesByTingkat["8"].length - 1]?.code} • Alokasi Jam Wajib & Mulok`
+                    : "Belum ada rombel kelas",
+                totalRombel: classesByTingkat["8"].length,
+                jamPekan: "40 Jam / Pekan",
+              },
+              {
+                tingkat: "9",
+                title: "Tingkat 9 (Fase D)",
+                desc:
+                  classesByTingkat["9"].length > 0
+                    ? `Kelas ${classesByTingkat["9"][0]?.code} s/d ${classesByTingkat["9"][classesByTingkat["9"].length - 1]?.code} • Pemantapan Ujian & Pembagian Jam`
+                    : "Belum ada rombel kelas",
+                totalRombel: classesByTingkat["9"].length,
+                jamPekan: "40 Jam / Pekan",
+              },
+            ].map((t) => (
+              <div
+                key={t.tingkat}
+                onClick={() => handleOpenTingkat(t.tingkat)}
+                className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs hover:border-[#0c3960] hover:shadow-md transform hover:-translate-y-0.5 transition cursor-pointer group flex flex-col justify-between"
               >
-                Coba Lagi
-              </button>
-            </div>
-          ) : assignments.length === 0 ? (
-            <div className="p-12 text-center">
-              <GraduationCap className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-slate-700">
-                Belum ada penugasan mengajar
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Tugaskan guru ke kelas dan mata pelajaran pada tahun ajaran aktif
-                sebelum membuat jadwal kelas.
-              </p>
-              <button
-                onClick={openCreateAssignmentModal}
-                className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#0c3960] text-white rounded-xl text-xs font-semibold hover:bg-[#092b49] cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Tambah Penugasan
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
-                <thead className="bg-slate-50/75 border-b border-slate-200 text-slate-700 uppercase font-semibold text-[11px] tracking-wider">
-                  <tr>
-                    <th className="px-4 py-3">Guru Pengampu</th>
-                    <th className="px-4 py-3">Mata Pelajaran</th>
-                    <th className="px-4 py-3">Kelas</th>
-                    <th className="px-4 py-3">Tahun Ajaran</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {assignments.map((assignment) => {
-                    const teacher = teacherMap.get(assignment.teacher_id);
-                    const cls = classMap.get(assignment.class_id);
-                    const subj = subjectMap.get(assignment.subject_id);
-                    const ay = academicYearMap.get(assignment.academic_year_id);
-
-                    return (
-                      <tr
-                        key={assignment.id}
-                        className="hover:bg-slate-50/50 transition-colors"
-                      >
-                        {/* Guru */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {teacher ? teacher.full_name : "Guru"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            NIP: {teacher?.nip || "-"}
-                          </div>
-                        </td>
-
-                        {/* Mapel */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {subj ? subj.name : "Mapel"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            Kode: {subj?.code || "-"}
-                          </div>
-                        </td>
-
-                        {/* Kelas */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {cls ? cls.name : "Kelas"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            Tingkat {cls?.grade || "-"} - Rombel{" "}
-                            {cls?.section || "-"}
-                          </div>
-                        </td>
-
-                        {/* Tahun Ajaran */}
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {ay ? ay.name : "Tahun Ajaran"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            Semester {ay?.semester || "-"}
-                          </div>
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-4 py-3.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                              assignment.active
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-slate-100 text-slate-600 border border-slate-200"
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                assignment.active
-                                  ? "bg-emerald-500"
-                                  : "bg-slate-400"
-                              }`}
-                            />
-                            {assignment.active ? "Aktif" : "Nonaktif"}
-                          </span>
-                        </td>
-
-                        {/* Aksi */}
-                        <td className="px-4 py-3.5 text-right space-x-1">
-                          <button
-                            onClick={() => openEditAssignmentModal(assignment)}
-                            className="p-1.5 text-slate-500 hover:text-[#0c3960] hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                            title="Edit Penugasan"
-                          >
-                            <PenSquare className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeletingAssignment(assignment);
-                              setDeleteAssignmentError(null);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            title="Nonaktifkan Penugasan"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {assignmentTotalPages > 1 && (
-            <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <span className="text-xs text-slate-500">
-                Halaman {assignmentPage} dari {assignmentTotalPages}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  disabled={assignmentPage <= 1}
-                  onClick={() => setAssignmentPage((p) => Math.max(p - 1, 1))}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  disabled={assignmentPage >= assignmentTotalPages}
-                  onClick={() =>
-                    setAssignmentPage((p) =>
-                      Math.min(p + 1, assignmentTotalPages)
-                    )
-                  }
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab 3: Jadwal Hari Ini (Today's Schedules) */}
-      {activeTab === "today" && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-emerald-600" />
-              <h2 className="font-semibold text-slate-800 text-sm">
-                Jadwal Hari Ini (Zona Waktu Asia/Jakarta)
-              </h2>
-              {isTodayFetching && (
-                <RefreshCw className="w-3.5 h-3.5 text-slate-400 animate-spin" />
-              )}
-            </div>
-            <span className="text-xs text-slate-500">
-              {todaySchedules.length} jadwal aktif hari ini
-            </span>
-          </div>
-
-          {isTodayLoading ? (
-            <div className="p-8 text-center">
-              <RefreshCw className="w-6 h-6 text-[#0c3960] animate-spin mx-auto mb-2" />
-              <p className="text-xs text-slate-500">
-                Memuat jadwal mengajar hari ini...
-              </p>
-            </div>
-          ) : isTodayError ? (
-            <div className="p-8 text-center">
-              <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-800">
-                Gagal memuat jadwal hari ini
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {(todayError as any)?.message || "Terjadi kesalahan server"}
-              </p>
-              <button
-                onClick={() => refetchToday()}
-                className="mt-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-700 cursor-pointer"
-              >
-                Coba Lagi
-              </button>
-            </div>
-          ) : todaySchedules.length === 0 ? (
-            <div className="p-12 text-center">
-              <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-slate-700">
-                Tidak ada jadwal pelajaran untuk hari ini
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                Hari ini tidak ada sesi tatap muka terjadwal atau hari libur.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
-                <thead className="bg-slate-50/75 border-b border-slate-200 text-slate-700 uppercase font-semibold text-[11px] tracking-wider">
-                  <tr>
-                    <th className="px-4 py-3">Jam Mengajar</th>
-                    <th className="px-4 py-3">Kelas</th>
-                    <th className="px-4 py-3">Mata Pelajaran</th>
-                    <th className="px-4 py-3">Guru Pengampu</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {todaySchedules.map((schedule) => {
-                    const cls = classMap.get(schedule.class_id);
-                    const subj = subjectMap.get(schedule.subject_id);
-                    const teacher = teacherMap.get(schedule.teacher_id);
-
-                    return (
-                      <tr
-                        key={schedule.id}
-                        className="hover:bg-slate-50/50 transition-colors"
-                      >
-                        <td className="px-4 py-3.5">
-                          <span className="font-semibold text-slate-900 font-mono text-xs bg-slate-100 px-2 py-1 rounded-md">
-                            {formatTime(schedule.starts_at)} -{" "}
-                            {formatTime(schedule.ends_at)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 font-semibold text-slate-900">
-                          {cls ? cls.name : "Kelas"}
-                        </td>
-                        <td className="px-4 py-3.5 font-semibold text-slate-900">
-                          {subj ? subj.name : "Mapel"}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="font-semibold text-slate-900">
-                            {teacher ? teacher.full_name : "Guru"}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            NIP: {teacher?.nip || "-"}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Aktif Hari Ini
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {todayTotalPages > 1 && (
-            <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <span className="text-xs text-slate-500">
-                Halaman {todayPage} dari {todayTotalPages}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  disabled={todayPage <= 1}
-                  onClick={() => setTodayPage((p) => Math.max(p - 1, 1))}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  disabled={todayPage >= todayTotalPages}
-                  onClick={() =>
-                    setTodayPage((p) => Math.min(p + 1, todayTotalPages))
-                  }
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* MODAL: Tambah / Edit Penugasan Guru */}
-      {isAssignmentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                <GraduationCap className="w-5 h-5 text-[#0c3960]" />
-                {editingAssignment
-                  ? "Ubah Penugasan Mengajar"
-                  : "Tambah Penugasan Mengajar"}
-              </h3>
-              <button
-                onClick={() => setIsAssignmentModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveAssignment} className="p-6 space-y-4">
-              {/* Modal Error / Conflict Alert */}
-              {assignmentModalError && (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-800">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">Perhatian: </span>
-                    {assignmentModalError}
-                  </div>
-                </div>
-              )}
-
-              {/* Guru */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Guru Pengampu <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={assignmentTeacherId}
-                  onChange={(e) => setAssignmentTeacherId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-                  required
-                >
-                  <option value="">-- Pilih Guru --</option>
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.user_id || t.id}>
-                      {t.full_name} ({t.nip})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Kelas */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Kelas <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={assignmentClassId}
-                  onChange={(e) => setAssignmentClassId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-                  required
-                >
-                  <option value="">-- Pilih Kelas --</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code}) - Tingkat {c.grade}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Mata Pelajaran */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mata Pelajaran <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={assignmentSubjectId}
-                  onChange={(e) => setAssignmentSubjectId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-                  required
-                >
-                  <option value="">-- Pilih Mata Pelajaran --</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Tahun Ajaran */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Tahun Ajaran <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={assignmentAcademicYearId}
-                  onChange={(e) => setAssignmentAcademicYearId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-                  required
-                >
-                  <option value="">-- Pilih Tahun Ajaran --</option>
-                  {academicYears.map((ay) => (
-                    <option key={ay.id} value={ay.id}>
-                      {ay.name} (Semester {ay.semester}){" "}
-                      {ay.active ? "- Aktif" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsAssignmentModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    createAssignmentMutation.isPending ||
-                    updateAssignmentMutation.isPending
-                  }
-                  className="px-4 py-2 bg-[#0c3960] hover:bg-[#092b49] text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {createAssignmentMutation.isPending ||
-                  updateAssignmentMutation.isPending
-                    ? "Menyimpan..."
-                    : "Simpan Penugasan"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Tambah / Edit Jadwal Pelajaran */}
-      {isScheduleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#0c3960]" />
-                {editingSchedule ? "Ubah Jadwal Kelas" : "Tambah Jadwal Kelas"}
-              </h3>
-              <button
-                onClick={() => setIsScheduleModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveSchedule} className="p-6 space-y-4">
-              {/* Modal Error / Conflict Alert */}
-              {scheduleModalError && (
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-800">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">Peringatan Bentrok: </span>
-                    {scheduleModalError}
-                  </div>
-                </div>
-              )}
-
-              {/* Penugasan Mengajar */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Penugasan Mengajar (Guru - Mapel - Kelas){" "}
-                  <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={scheduleAssignmentId}
-                  onChange={(e) => setScheduleAssignmentId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-                  required
-                >
-                  <option value="">-- Pilih Penugasan Guru --</option>
-                  {assignableList.map((a) => {
-                    const t = teacherMap.get(a.teacher_id);
-                    const s = subjectMap.get(a.subject_id);
-                    const c = classMap.get(a.class_id);
-                    const ay = academicYearMap.get(a.academic_year_id);
-                    return (
-                      <option key={a.id} value={a.id}>
-                        {t?.full_name || "Guru"} - {s?.name || "Mapel"} (
-                        {c?.name || "Kelas"}) [{ay?.name || "TA"}]
-                      </option>
-                    );
-                  })}
-                </select>
-                {assignableList.length === 0 && (
-                  <p className="text-[11px] text-amber-600 mt-1">
-                    Belum ada penugasan guru yang terdaftar. Tambahkan penugasan
-                    guru terlebih dahulu di tab &quot;Penugasan Guru&quot;.
-                  </p>
-                )}
-              </div>
-
-              {/* Hari & Jam */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Hari <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={scheduleDayOfWeek}
-                    onChange={(e) =>
-                      setScheduleDayOfWeek(parseInt(e.target.value, 10))
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="w-12 h-12 rounded-xl bg-blue-50 text-[#0c3960] group-hover:bg-[#0c3960] group-hover:text-white transition flex items-center justify-center font-extrabold text-lg">
+                      {t.tingkat}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">{t.jamPekan}</span>
+                  </div>
+                  <h4 className="text-base font-bold text-slate-900 group-hover:text-[#0c3960] transition">
+                    {t.title}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">{t.desc}</p>
+                </div>
+                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-600">
+                    {t.totalRombel} Rombel Terdaftar
+                  </span>
+                  <span className="text-xs font-bold text-blue-700 group-hover:underline flex items-center gap-1">
+                    <span>Pilih Rombel</span> <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TIER 2: PILIHAN ROMBEL KELAS (MISAL KELAS TINGKAT 7) */}
+      {/* ========================================================================= */}
+      {currentTier === 2 && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+            <button
+              onClick={handleBackToTingkat}
+              className="inline-flex items-center gap-2 text-xs font-bold text-blue-700 hover:text-blue-800 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Kembali ke Pilihan Jenjang (7, 8, 9)</span>
+            </button>
+            <span className="text-xs text-slate-500 font-medium">
+              Jadwal Pelajaran / Tingkat {selectedTingkat}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {(classesByTingkat[selectedTingkat] || []).map((cls) => {
+              const classKey = normalizeClassKey(cls.code);
+              const countSlots = (schedulesByClass[classKey] || []).length;
+
+              return (
+                <div
+                  key={cls.id}
+                  onClick={() => handleOpenRoster(cls)}
+                  className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-[#0c3960] hover:shadow-md transform hover:-translate-y-0.5 transition cursor-pointer group flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="px-2.5 py-1 bg-blue-50 text-[#0c3960] group-hover:bg-[#0c3960] group-hover:text-white transition font-black text-xs rounded-lg">
+                        {cls.code}
+                      </span>
+                      <span className="text-xs text-slate-400 font-medium">Senin - Jumat</span>
+                    </div>
+                    <h4 className="font-bold text-slate-800 text-sm group-hover:text-[#0c3960] transition">
+                      {cls.name}
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Wali Kelas: {cls.homeroom_teacher_name || "Belum Ditentukan"}
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] text-emerald-600 font-bold">
+                      {countSlots > 0 ? `${countSlots} Slot Jam Terisi` : "Belum Ada Jadwal"}
+                    </span>
+                    <span className="text-xs font-bold text-blue-700 group-hover:underline flex items-center gap-1">
+                      <span>Buka Roster</span> <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TIER 3: ROSTER SENIN - JUMAT UNTUK ROMBEL TERPILIH */}
+      {/* ========================================================================= */}
+      {currentTier === 3 && selectedClass && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          {/* Back Nav Bar */}
+          <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+            <button
+              onClick={handleBackToRombel}
+              className="inline-flex items-center gap-2 text-xs font-bold text-blue-700 hover:text-blue-800 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Kembali ke Rombel Tingkat {selectedTingkat}</span>
+            </button>
+            <span className="text-xs text-slate-500 font-medium">
+              Jadwal Pelajaran / Tingkat {selectedTingkat} / {selectedClass.name}
+            </span>
+          </div>
+
+          {/* Header Rombel Jadwal */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-blue-100 text-[#0c3960] text-xs font-black tracking-wider">
+                  {selectedClass.code}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                  Kurikulum Merdeka Fase D
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mt-1">
+                Jadwal Pelajaran — {selectedClass.name}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Wali Kelas: {selectedClass.homeroom_teacher_name || "Belum Ditentukan"} • 5 Hari Belajar (Senin s/d Jumat)
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setIsManageTimeModalOpen(true)}
+                className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                title="Sesuaikan daftar jam & waktu pelajaran sekolah"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Atur Jam Pelajaran</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGenerateDefaultJadwal}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                title="Muat jadwal default otomatis jika jadwal kosong"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Jadwal Standar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenAddSlot()}
+                className="bg-[#0c3960] hover:bg-[#092b49] text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah Slot Jadwal</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tabel Roster Mingguan (Senin - Jumat) */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase text-[11px]">
+                  <tr>
+                    <th className="px-3 py-3.5 text-center w-36 border-r border-slate-200 bg-slate-100/70">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span>Waktu / Jam</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsManageTimeModalOpen(true)}
+                          className="text-slate-400 hover:text-[#0c3960] transition cursor-pointer p-0.5"
+                          title="Ubah Waktu & Jam Pelajaran Sekolah"
+                        >
+                          <Settings className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </th>
+                    <th className="px-4 py-3.5 text-center border-r border-slate-200 min-w-[155px]">
+                      Senin
+                    </th>
+                    <th className="px-4 py-3.5 text-center border-r border-slate-200 min-w-[155px]">
+                      Selasa
+                    </th>
+                    <th className="px-4 py-3.5 text-center border-r border-slate-200 min-w-[155px]">
+                      Rabu
+                    </th>
+                    <th className="px-4 py-3.5 text-center border-r border-slate-200 min-w-[155px]">
+                      Kamis
+                    </th>
+                    <th className="px-4 py-3.5 text-center min-w-[155px]">
+                      Jumat
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {allRowSlots.map((slot) => {
+                    if (slot.isBreak) {
+                      return (
+                        <tr
+                          key={slot.id}
+                          className="bg-amber-50/60 font-semibold text-amber-900 border-y border-amber-200 group/timeslot"
+                        >
+                          <td className="px-3 py-2.5 text-center font-bold border-r border-slate-200 bg-amber-100/50 relative">
+                            <div className="text-amber-900 text-xs">{slot.label}</div>
+                            <div className="text-[10px] text-amber-700 font-normal font-mono">
+                              {slot.time}
+                            </div>
+                          </td>
+                          <td
+                            colSpan={5}
+                            className="px-4 py-2.5 text-center text-xs tracking-wider uppercase text-amber-800 font-bold"
+                          >
+                            <span className="inline-flex items-center justify-center gap-1.5">
+                              <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                              <span>
+                                {slot.label} — WAKTU REHAT SISWA & GURU ({slot.time})
+                              </span>
+                            </span>
+                          </td>
+                        </tr>
+                      );
                     }
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960] cursor-pointer"
-                    required
+
+                    return (
+                      <tr key={slot.id} className="hover:bg-slate-50/50 transition group/timeslot">
+                        {/* Slot Time Column */}
+                        <td className="px-3 py-3 text-center border-r border-slate-200 bg-slate-50 font-bold text-slate-700 relative">
+                          <div className="text-xs text-[#0c3960]">{slot.label}</div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {slot.time}
+                          </div>
+                        </td>
+
+                        {/* Days Columns */}
+                        {DAYS_OF_WEEK.map((day) => {
+                          const matchedSlot = currentClassSchedules.find(
+                            (s) => s.day === day && s.time === slot.time
+                          );
+
+                          if (matchedSlot) {
+                            return (
+                              <td
+                                key={`${slot.id}-${day}`}
+                                className="px-3.5 py-3 border-r border-slate-200 align-top"
+                              >
+                                <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-2.5 shadow-2xs hover:border-[#0c3960] hover:shadow-xs transition group">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="px-1.5 py-0.5 rounded bg-blue-100 text-[#0c3960] font-black text-[9px]">
+                                      {matchedSlot.code}
+                                    </span>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditSlot(matchedSlot)}
+                                        className="text-slate-400 hover:text-blue-700 transition p-0.5 cursor-pointer"
+                                        title="Ubah Slot"
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteSlot(matchedSlot.id)}
+                                        className="text-slate-400 hover:text-rose-600 transition p-0.5 cursor-pointer"
+                                        title="Hapus Slot"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="font-bold text-slate-900 text-xs leading-snug cursor-pointer hover:text-blue-800 transition"
+                                    onClick={() => handleOpenEditSlot(matchedSlot)}
+                                    title="Klik untuk edit slot ini"
+                                  >
+                                    {matchedSlot.subject}
+                                  </div>
+                                  <div className="text-[11px] text-slate-600 mt-1 flex items-center gap-1">
+                                    <User className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                    <span className="truncate">{matchedSlot.teacher}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 mt-0.5 flex items-center justify-between font-mono">
+                                    <span className="flex items-center gap-1">
+                                      <MapPin className="w-2.5 h-2.5 shrink-0" />
+                                      <span>{matchedSlot.room || "Ruang Kelas"}</span>
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 font-sans">
+                                      {matchedSlot.time}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td
+                              key={`${slot.id}-${day}`}
+                              className="px-3.5 py-3 border-r border-slate-200 text-center align-middle"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAddSlot(day, slot.time)}
+                                className="w-full py-3.5 rounded-xl border border-dashed border-slate-200 hover:border-[#0c3960] hover:bg-blue-50/30 text-slate-300 hover:text-[#0c3960] transition cursor-pointer text-[11px] flex flex-col items-center justify-center gap-1"
+                                title="Tambah Mata Pelajaran di Jam Ini"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-semibold">Kosong</span>
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: TAMBAH / EDIT SLOT JADWAL */}
+      {/* ========================================================================= */}
+      {isSlotModalOpen && selectedClass && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">
+                {slotModalMode === "edit"
+                  ? `Edit Slot Jadwal (${selectedClass.code}) — ${slotDay}`
+                  : `Tambah Slot Jadwal (${selectedClass.code})`}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSlotModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSlot} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Hari Pelajaran</label>
+                  <select
+                    value={slotDay}
+                    onChange={(e) => setSlotDay(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden"
                   >
                     {DAYS_OF_WEEK.map((d) => (
-                      <option key={d.value} value={d.value}>
-                        {d.label}
+                      <option key={d} value={d}>
+                        {d}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Jam Mulai <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="time"
-                    value={scheduleStartsAt}
-                    onChange={(e) => setScheduleStartsAt(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Jam Selesai <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="time"
-                    value={scheduleEndsAt}
-                    onChange={(e) => setScheduleEndsAt(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960]"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Rentang Tanggal Berlaku */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Berlaku Mulai <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={scheduleEffectiveFrom}
-                    onChange={(e) => setScheduleEffectiveFrom(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Berlaku Sampai (Opsional)
-                  </label>
-                  <input
-                    type="date"
-                    value={scheduleEffectiveUntil}
-                    onChange={(e) => setScheduleEffectiveUntil(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#0c3960]"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-700">Slot Waktu / Jam</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsManageTimeModalOpen(true)}
+                      className="text-[10px] text-blue-700 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Settings className="w-2.5 h-2.5" /> Atur
+                    </button>
+                  </div>
+                  <select
+                    value={slotTimeSelect}
+                    onChange={(e) => setSlotTimeSelect(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden"
+                  >
+                    {standardTimeSlots.map((s) => (
+                      <option key={s.id} value={s.time}>
+                        {s.label} ({s.time}) {s.isBreak ? "[Istirahat]" : ""}
+                      </option>
+                    ))}
+                    <option value="__custom__">⚙️ Waktu Kustom Lainnya...</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+              {/* Custom Time Container */}
+              {slotTimeSelect === "__custom__" && (
+                <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-semibold text-slate-800 text-[11px]">
+                      Kustom Jam Pelajaran Sendiri
+                    </label>
+                    <span className="text-[10px] text-blue-700 font-medium">Bebas diatur</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">Waktu Mulai:</span>
+                      <input
+                        type="time"
+                        value={customStartTime}
+                        onChange={(e) => setCustomStartTime(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">Waktu Selesai:</span>
+                      <input
+                        type="time"
+                        value={customEndTime}
+                        onChange={(e) => setCustomEndTime(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Pilih Mata Pelajaran
+                </label>
+                <select
+                  value={slotSubject}
+                  onChange={(e) => setSlotSubject(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden"
+                >
+                  {subjects.length > 0 ? (
+                    subjects.map((sub) => (
+                      <option key={sub.id} value={sub.name}>
+                        {sub.name} ({sub.code})
+                      </option>
+                    ))
+                  ) : (
+                    [
+                      "Bahasa Indonesia",
+                      "Matematika",
+                      "Ilmu Pengetahuan Alam (IPA)",
+                      "Bahasa Inggris",
+                      "Pendidikan Agama Islam",
+                      "Pendidikan Jasmani (PJOK)",
+                      "Ilmu Pengetahuan Sosial (IPS)",
+                      "Informatika",
+                      "Pendidikan Pancasila (PPKn)",
+                      "Seni Budaya",
+                      "Prakarya",
+                    ].map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Guru Pengampu</label>
+                <select
+                  value={slotTeacher}
+                  onChange={(e) => setSlotTeacher(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden"
+                >
+                  {teachers.length > 0 ? (
+                    teachers.map((t) => (
+                      <option key={t.id} value={t.full_name}>
+                        {t.full_name}
+                      </option>
+                    ))
+                  ) : (
+                    [
+                      "Siti Rahmawati, S.Pd.",
+                      "Budi Santoso, M.Pd.",
+                      "Rina Marlina, S.Si.",
+                      "Ahmad Fauzi, S.Pd.",
+                      "Drs. H. Mulyadi",
+                      "Dedi Kurniawan, S.Pd.",
+                      "Agus Salim, M.Pd.",
+                      "Eko Prasetyo, S.Kom.",
+                      "Nurul Hidayah, M.Pd.",
+                      "Sri Wahyuningsih, S.Pd.",
+                      "Ade Chandra, S.Sn.",
+                    ].map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Ruangan / Tempat</label>
+                <input
+                  type="text"
+                  value={slotRoom}
+                  onChange={(e) => setSlotRoom(e.target.value)}
+                  placeholder={`Contoh: Ruang ${selectedClass.code} / Lab IPA / Lapangan`}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-1 focus:ring-[#0c3960] focus:outline-hidden"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsScheduleModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+                  onClick={() => setIsSlotModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold cursor-pointer hover:bg-slate-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  disabled={
-                    createScheduleMutation.isPending ||
-                    updateScheduleMutation.isPending
-                  }
-                  className="px-4 py-2 bg-[#0c3960] hover:bg-[#092b49] text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-2 bg-[#0c3960] hover:bg-[#092b49] text-white rounded-xl font-bold cursor-pointer shadow-xs"
                 >
-                  {createScheduleMutation.isPending ||
-                  updateScheduleMutation.isPending
-                    ? "Menyimpan..."
-                    : "Simpan Jadwal"}
+                  {slotModalMode === "edit" ? "Perbarui Jadwal" : "Simpan Jadwal"}
                 </button>
               </div>
             </form>
@@ -1687,111 +1095,139 @@ export default function JadwalPage() {
         </div>
       )}
 
-      {/* MODAL: Konfirmasi Hapus Penugasan */}
-      {deletingAssignment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 text-rose-600 mb-3">
-              <div className="p-2 bg-rose-50 rounded-xl">
-                <AlertTriangle className="w-6 h-6" />
+      {/* ========================================================================= */}
+      {/* MODAL: ATUR JAM PELAJARAN SEKOLAH */}
+      {/* ========================================================================= */}
+      {isManageTimeModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-sm font-bold">
+                  <Clock className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Atur Jam & Waktu Pelajaran Sekolah
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Sesuaikan struktur jam ke-X dan jam istirahat untuk seluruh rombel
+                  </p>
+                </div>
               </div>
-              <h3 className="font-bold text-slate-900 text-base">
-                Nonaktifkan Penugasan Guru?
-              </h3>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Apakah Anda yakin ingin menonaktifkan penugasan guru{" "}
-              <span className="font-bold text-slate-900">
-                {teacherMap.get(deletingAssignment.teacher_id)?.full_name ||
-                  "Guru"}
-              </span>{" "}
-              untuk mata pelajaran{" "}
-              <span className="font-bold text-slate-900">
-                {subjectMap.get(deletingAssignment.subject_id)?.name || "Mapel"}
-              </span>{" "}
-              di kelas{" "}
-              <span className="font-bold text-slate-900">
-                {classMap.get(deletingAssignment.class_id)?.name || "Kelas"}
-              </span>
-              ? Riwayat absensi lampau akan tetap dipertahankan.
-            </p>
-
-            {deleteAssignmentError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 mb-4">
-                {deleteAssignmentError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2">
               <button
-                onClick={() => setDeletingAssignment(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+                type="button"
+                onClick={() => setIsManageTimeModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm p-1 cursor-pointer"
               >
-                Batal
-              </button>
-              <button
-                onClick={handleDeleteAssignment}
-                disabled={deleteAssignmentMutation.isPending}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                {deleteAssignmentMutation.isPending
-                  ? "Menonaktifkan..."
-                  : "Ya, Nonaktifkan"}
+                <X className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* MODAL: Konfirmasi Hapus Jadwal */}
-      {deletingSchedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 text-rose-600 mb-3">
-              <div className="p-2 bg-rose-50 rounded-xl">
-                <AlertTriangle className="w-6 h-6" />
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
+              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-semibold text-slate-600">
+                  Daftar Slot Jam Aktif ({standardTimeSlots.length} Slot)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newSlot: TimeSlot = {
+                      id: `slot-${Date.now()}`,
+                      label: `Jam Baru`,
+                      time: `13.30 - 14.50`,
+                      isBreak: false,
+                    };
+                    saveStandardTimeSlots([...standardTimeSlots, newSlot]);
+                  }}
+                  className="px-2.5 py-1 bg-[#0c3960] text-white rounded-lg text-[10px] font-bold hover:bg-[#092b49] flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" /> Tambah Jam
+                </button>
               </div>
-              <h3 className="font-bold text-slate-900 text-base">
-                Nonaktifkan Jadwal Kelas?
-              </h3>
+
+              <div className="space-y-2">
+                {standardTimeSlots.map((slot, idx) => (
+                  <div
+                    key={slot.id}
+                    className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
+                      slot.isBreak
+                        ? "bg-amber-50/70 border-amber-200"
+                        : "bg-white border-slate-200"
+                    }`}
+                  >
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        value={slot.label}
+                        onChange={(e) => {
+                          const updated = [...standardTimeSlots];
+                          updated[idx].label = e.target.value;
+                          saveStandardTimeSlots(updated);
+                        }}
+                        className="px-2.5 py-1 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden"
+                        placeholder="Label Slot"
+                      />
+                      <input
+                        type="text"
+                        value={slot.time}
+                        onChange={(e) => {
+                          const updated = [...standardTimeSlots];
+                          updated[idx].time = e.target.value;
+                          saveStandardTimeSlots(updated);
+                        }}
+                        className="px-2.5 py-1 border border-slate-200 rounded-lg text-xs font-mono focus:outline-hidden"
+                        placeholder="07.00 - 08.20"
+                      />
+                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={slot.isBreak}
+                          onChange={(e) => {
+                            const updated = [...standardTimeSlots];
+                            updated[idx].isBreak = e.target.checked;
+                            saveStandardTimeSlots(updated);
+                          }}
+                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span>Waktu Istirahat</span>
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = standardTimeSlots.filter((s) => s.id !== slot.id);
+                        saveStandardTimeSlots(updated);
+                      }}
+                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer transition"
+                      title="Hapus Jam Ini"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Apakah Anda yakin ingin menonaktifkan jadwal kelas pada hari{" "}
-              <span className="font-bold text-slate-900">
-                {formatDayName(deletingSchedule.day_of_week)} (
-                {formatTime(deletingSchedule.starts_at)} -{" "}
-                {formatTime(deletingSchedule.ends_at)})
-              </span>{" "}
-              untuk kelas{" "}
-              <span className="font-bold text-slate-900">
-                {classMap.get(deletingSchedule.class_id)?.name || "Kelas"}
-              </span>
-              ?
-            </p>
-
-            {deleteScheduleError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 mb-4">
-                {deleteScheduleError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 text-xs">
               <button
-                onClick={() => setDeletingSchedule(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+                type="button"
+                onClick={() => {
+                  if (confirm("Reset ke daftar jam standar sekolah (default)?")) {
+                    saveStandardTimeSlots(DEFAULT_STANDARD_TIME_SLOTS);
+                  }
+                }}
+                className="text-slate-500 hover:text-slate-800 text-[11px] font-semibold underline cursor-pointer"
               >
-                Batal
+                Reset ke Default
               </button>
               <button
-                onClick={handleDeleteSchedule}
-                disabled={deleteScheduleMutation.isPending}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                type="button"
+                onClick={() => setIsManageTimeModalOpen(false)}
+                className="px-4 py-2 bg-[#0c3960] text-white rounded-xl font-bold cursor-pointer hover:bg-[#092b49]"
               >
-                {deleteScheduleMutation.isPending
-                  ? "Menonaktifkan..."
-                  : "Ya, Nonaktifkan"}
+                Selesai
               </button>
             </div>
           </div>
