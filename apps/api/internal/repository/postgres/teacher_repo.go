@@ -58,7 +58,7 @@ func (r *TeacherRepo) List(ctx context.Context, f domain.TeacherFilter) ([]domai
 		offset = 0
 	}
 
-	selectQuery := `SELECT t.id, t.user_id, COALESCE(t.nip, ''), u.name, u.email, t.phone, t.status, t.created_at, t.updated_at, t.deleted_at
+	selectQuery := `SELECT t.id, t.user_id, COALESCE(t.nip, ''), u.name, u.email, COALESCE(t.phone, ''), t.status, t.created_at, t.updated_at, t.deleted_at
 		FROM teachers t
 		JOIN users u ON u.id = t.user_id` + where +
 		` ORDER BY u.name ASC LIMIT $` + string(rune('0'+argIdx)) + ` OFFSET $` + string(rune('0'+argIdx+1))
@@ -83,7 +83,7 @@ func (r *TeacherRepo) List(ctx context.Context, f domain.TeacherFilter) ([]domai
 }
 
 func (r *TeacherRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.TeacherRecord, error) {
-	query := `SELECT t.id, t.user_id, COALESCE(t.nip, ''), u.name, u.email, t.phone, t.status, t.created_at, t.updated_at, t.deleted_at
+	query := `SELECT t.id, t.user_id, COALESCE(t.nip, ''), u.name, u.email, COALESCE(t.phone, ''), t.status, t.created_at, t.updated_at, t.deleted_at
 		FROM teachers t
 		JOIN users u ON u.id = t.user_id
 		WHERE (t.id = $1 OR t.user_id = $1) AND t.deleted_at IS NULL`
@@ -175,7 +175,7 @@ func (r *TeacherRepo) Update(ctx context.Context, id uuid.UUID, input domain.Tea
 	var userID uuid.UUID
 	var curNip, curPhone, curStatus string
 	var curName, curEmail string
-	err = tx.QueryRow(ctx, `SELECT t.user_id, COALESCE(t.nip, ''), t.phone, t.status, u.name, u.email
+	err = tx.QueryRow(ctx, `SELECT t.user_id, COALESCE(t.nip, ''), COALESCE(t.phone, ''), t.status, u.name, u.email
 		FROM teachers t JOIN users u ON u.id = t.user_id
 		WHERE (t.id = $1 OR t.user_id = $1) AND t.deleted_at IS NULL FOR UPDATE`, id).
 		Scan(&userID, &curNip, &curPhone, &curStatus, &curName, &curEmail)
