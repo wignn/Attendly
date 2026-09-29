@@ -70,34 +70,6 @@ function normalizeGrade(gradeOrCode: string): string {
   return "7";
 }
 
-function normalizeKey(str: string): string {
-  if (!str) return "";
-  return str.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-// Standar Rombel SMPN 1 Tirtajaya (Tingkat 7, 8, 9)
-const DEFAULT_CLASSES: ClassItemData[] = [
-  { id: "7a", code: "7A", name: "Kelas 7A", tingkat: "7", wali: "Budi Santoso, M.Pd.", totalSiswa: 32, percentage: 96 },
-  { id: "7b", code: "7B", name: "Kelas 7B", tingkat: "7", wali: "Siti Rahmawati, S.Pd.", totalSiswa: 32, percentage: 94 },
-  { id: "7c", code: "7C", name: "Kelas 7C", tingkat: "7", wali: "Ahmad Fauzi, S.Pd.", totalSiswa: 30, percentage: 98 },
-  { id: "7d", code: "7D", name: "Kelas 7D", tingkat: "7", wali: "Rina Marlina, S.Si.", totalSiswa: 31, percentage: 95 },
-  { id: "7e", code: "7E", name: "Kelas 7E", tingkat: "7", wali: "Dedi Kurniawan, S.Pd.", totalSiswa: 32, percentage: 92 },
-  { id: "7f", code: "7F", name: "Kelas 7F", tingkat: "7", wali: "Agus Salim, M.Pd.", totalSiswa: 30, percentage: 97 },
-
-  { id: "8a", code: "8A", name: "Kelas 8A", tingkat: "8", wali: "Eko Prasetyo, S.Kom.", totalSiswa: 32, percentage: 95 },
-  { id: "8b", code: "8B", name: "Kelas 8B", tingkat: "8", wali: "Nurul Hidayah, M.Pd.", totalSiswa: 31, percentage: 96 },
-  { id: "8c", code: "8C", name: "Kelas 8C", tingkat: "8", wali: "Sri Wahyuningsih, S.Pd.", totalSiswa: 32, percentage: 93 },
-  { id: "8d", code: "8D", name: "Kelas 8D", tingkat: "8", wali: "Ade Chandra, S.Sn.", totalSiswa: 30, percentage: 98 },
-  { id: "8e", code: "8E", name: "Kelas 8E", tingkat: "8", wali: "Drs. H. Mulyadi", totalSiswa: 32, percentage: 97 },
-  { id: "8f", code: "8F", name: "Kelas 8F", tingkat: "8", wali: "Ratna Sari Dewi, S.Pd.", totalSiswa: 31, percentage: 94 },
-
-  { id: "9a", code: "9A", name: "Kelas 9A", tingkat: "9", wali: "Hendra Wijaya, S.Pd.", totalSiswa: 32, percentage: 97 },
-  { id: "9b", code: "9B", name: "Kelas 9B", tingkat: "9", wali: "Tri Cahyono, M.Pd.", totalSiswa: 32, percentage: 95 },
-  { id: "9c", code: "9C", name: "Kelas 9C", tingkat: "9", wali: "Fitri Handayani, S.Pd.", totalSiswa: 31, percentage: 98 },
-  { id: "9d", code: "9D", name: "Kelas 9D", tingkat: "9", wali: "Rizky Pratama, S.Pd.", totalSiswa: 30, percentage: 96 },
-  { id: "9e", code: "9E", name: "Kelas 9E", tingkat: "9", wali: "Dewi Lestari, S.Pd.", totalSiswa: 32, percentage: 94 },
-  { id: "9f", code: "9F", name: "Kelas 9F", tingkat: "9", wali: "Ahmad Dahlan, S.Pd.", totalSiswa: 31, percentage: 99 },
-];
 
 export default function SiswaPage() {
   // 3-Tier View Navigation: 1 = Pilih Jenjang, 2 = Pilihan Rombel Kelas, 3 = Detail Siswa Kelas / Global
@@ -128,52 +100,20 @@ export default function SiswaPage() {
   const { data: classesData, isLoading: isLoadingClasses } = useClasses({ per_page: 100 });
   const backendClasses = classesData?.data || [];
 
-  // Merge default standard classes with real PostgreSQL backend classes
-  const classesList: ClassItemData[] = React.useMemo(() => {
-    const list: ClassItemData[] = DEFAULT_CLASSES.map((dc) => {
-      const match = backendClasses.find(
-        (bc) =>
-          bc.id === dc.id ||
-          normalizeKey(bc.code) === normalizeKey(dc.code) ||
-          normalizeKey(bc.name) === normalizeKey(dc.name)
-      );
-      if (match) {
-        return {
-          ...dc,
-          id: match.id,
-          code: match.code || dc.code,
-          name: match.name || dc.name,
-          tingkat: normalizeGrade(match.grade || match.code),
-          wali: match.homeroom_teacher_name || dc.wali,
-          totalSiswa: match.total_students ?? dc.totalSiswa,
-        };
-      }
-      return dc;
-    });
-
-    // Add any backend class that didn't match default list
-    backendClasses.forEach((bc) => {
-      const exists = list.some(
-        (c) =>
-          c.id === bc.id ||
-          normalizeKey(c.code) === normalizeKey(bc.code) ||
-          normalizeKey(c.name) === normalizeKey(bc.name)
-      );
-      if (!exists) {
-        list.push({
-          id: bc.id,
-          code: bc.code,
-          name: bc.name,
-          tingkat: normalizeGrade(bc.grade || bc.code),
-          wali: bc.homeroom_teacher_name || "Belum Ditentukan",
-          totalSiswa: bc.total_students ?? 0,
-          percentage: 95,
-        });
-      }
-    });
-
-    return list;
-  }, [backendClasses]);
+  // Use only classes returned by the API; their IDs are the real UUIDs.
+  const classesList: ClassItemData[] = React.useMemo(
+    () =>
+      backendClasses.map((bc) => ({
+        id: bc.id,
+        code: bc.code,
+        name: bc.name,
+        tingkat: normalizeGrade(bc.grade || bc.code),
+        wali: bc.homeroom_teacher_name || "Belum Ditentukan",
+        totalSiswa: bc.total_students ?? 0,
+        percentage: 95,
+      })),
+    [backendClasses]
+  );
 
   // Resolve current selected class object
   const currentSelectedClass = React.useMemo(() => {

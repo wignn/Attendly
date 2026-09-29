@@ -86,7 +86,7 @@ func (s *ScheduleService) Create(ctx context.Context, user *domain.User, input d
 	if !scheduleAdmin(user) {
 		return nil, domain.ErrForbidden
 	}
-	item := &domain.Schedule{ID: uuid.New(), TeachingAssignmentID: input.TeachingAssignmentID, DayOfWeek: input.DayOfWeek, StartsAt: input.StartsAt, EndsAt: input.EndsAt, EffectiveFrom: input.EffectiveFrom, EffectiveUntil: input.EffectiveUntil, Active: true}
+	item := &domain.Schedule{ID: uuid.New(), TeachingAssignmentID: input.TeachingAssignmentID, DayOfWeek: input.DayOfWeek, StartsAt: &input.StartsAt, EndsAt: &input.EndsAt, EffectiveFrom: input.EffectiveFrom, EffectiveUntil: input.EffectiveUntil, Active: true}
 	if err := validateSchedule(item); err != nil {
 		return nil, err
 	}
@@ -120,10 +120,10 @@ func (s *ScheduleService) Update(ctx context.Context, user *domain.User, id uuid
 		item.DayOfWeek = *input.DayOfWeek
 	}
 	if input.StartsAt != nil {
-		item.StartsAt = *input.StartsAt
+		item.StartsAt = input.StartsAt
 	}
 	if input.EndsAt != nil {
-		item.EndsAt = *input.EndsAt
+		item.EndsAt = input.EndsAt
 	}
 	if input.EffectiveFrom != nil {
 		item.EffectiveFrom = *input.EffectiveFrom
@@ -169,10 +169,19 @@ func validateSchedule(item *domain.Schedule) error {
 	if item.TeachingAssignmentID == uuid.Nil || item.DayOfWeek < 1 || item.DayOfWeek > 7 || !validDate(item.EffectiveFrom) {
 		return domain.ErrValidation
 	}
-	start, startErr := parseClock(item.StartsAt)
-	end, endErr := parseClock(item.EndsAt)
-	if startErr != nil || endErr != nil || !start.Before(end) {
-		return domain.ErrValidation
+	if item.PeriodNo != nil {
+		if *item.PeriodNo < 1 || *item.PeriodNo > 9 || item.StartsAt != nil || item.EndsAt != nil {
+			return domain.ErrValidation
+		}
+	} else {
+		if item.StartsAt == nil || item.EndsAt == nil {
+			return domain.ErrValidation
+		}
+		start, startErr := parseClock(*item.StartsAt)
+		end, endErr := parseClock(*item.EndsAt)
+		if startErr != nil || endErr != nil || !start.Before(end) {
+			return domain.ErrValidation
+		}
 	}
 	if item.EffectiveUntil != nil && (!validDate(*item.EffectiveUntil) || *item.EffectiveUntil < item.EffectiveFrom) {
 		return domain.ErrValidation

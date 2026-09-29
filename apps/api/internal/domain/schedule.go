@@ -17,8 +17,9 @@ type Schedule struct {
 	SubjectID            uuid.UUID `json:"subject_id"`
 	AcademicYearID       uuid.UUID `json:"academic_year_id"`
 	DayOfWeek            int       `json:"day_of_week"`
-	StartsAt             string    `json:"starts_at"`
-	EndsAt               string    `json:"ends_at"`
+	PeriodNo             *int      `json:"period_no"`
+	StartsAt             *string   `json:"starts_at"`
+	EndsAt               *string   `json:"ends_at"`
 	EffectiveFrom        string    `json:"effective_from"`
 	EffectiveUntil       *string   `json:"effective_until,omitempty"`
 	Active               bool      `json:"active"`

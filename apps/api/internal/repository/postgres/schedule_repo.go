@@ -16,7 +16,7 @@ type ScheduleRepo struct{ pool *pgxpool.Pool }
 func NewScheduleRepo(pool *pgxpool.Pool) domain.ScheduleRepository { return &ScheduleRepo{pool: pool} }
 
 const scheduleSelect = `SELECT s.id,s.teaching_assignment_id,s.teacher_id,s.class_id,ta.subject_id,s.academic_year_id,
- s.day_of_week,s.starts_at::text,s.ends_at::text,s.effective_from::text,s.effective_until::text,
+ s.day_of_week,s.period_no,s.starts_at::text,s.ends_at::text,s.effective_from::text,s.effective_until::text,
  s.active,s.created_at,s.updated_at FROM class_schedules s
  JOIN teaching_assignments ta ON ta.id=s.teaching_assignment_id
  JOIN academic_years ay ON ay.id=s.academic_year_id`
@@ -46,7 +46,7 @@ func scheduleFilterArgs(f domain.ScheduleFilter) []any {
 func scanSchedule(row interface{ Scan(...any) error }) (*domain.Schedule, error) {
 	var item domain.Schedule
 	err := row.Scan(&item.ID, &item.TeachingAssignmentID, &item.TeacherID, &item.ClassID,
-		&item.SubjectID, &item.AcademicYearID, &item.DayOfWeek, &item.StartsAt, &item.EndsAt,
+		&item.SubjectID, &item.AcademicYearID, &item.DayOfWeek, &item.PeriodNo, &item.StartsAt, &item.EndsAt,
 		&item.EffectiveFrom, &item.EffectiveUntil, &item.Active, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return nil, mapScheduleError(err)

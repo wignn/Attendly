@@ -1,0 +1,2 @@
+ALTER TABLE teachers
+ALTER COLUMN phone DROP NOT NULL;

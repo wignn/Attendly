@@ -9,7 +9,7 @@ export const TeacherRecordSchema = z.object({
   nip: z.string(),
   full_name: z.string(),
   email: z.string().email(),
-  phone: z.string().optional(),
+  phone: z.string().nullable().optional(),
   status: TeacherStatusEnum,
   created_at: z.string(),
   updated_at: z.string(),

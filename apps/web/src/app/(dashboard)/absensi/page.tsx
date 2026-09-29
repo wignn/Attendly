@@ -28,9 +28,10 @@ import { useTeachers } from "@/hooks/use-teachers";
 import { useSubjects } from "@/hooks/use-subjects";
 import {
   useAttendanceSessions,
+  useAttendanceSession,
   useUpdateAttendanceRecords,
 } from "@/hooks/use-attendance-sessions";
-import { ClassDetailDto, AttendanceStatus } from "@komas/shared-types";
+import { ClassDetailDto, AttendanceSessionDetailDto, AttendanceStatus } from "@komas/shared-types";
 
 export type StudentAttendanceStatus = "Hadir" | "Izin" | "Sakit" | "Alpa";
 
@@ -53,8 +54,16 @@ export interface ClassSessionItem {
   jam: string;
   status: "Selesai Diabsen" | "Sedang Berlangsung" | "Belum Diabsen";
   submitTime: string;
+  presentCount?: number;
+  excusedCount?: number;
+  sickCount?: number;
+  absentCount?: number;
+  totalStudents?: number;
   students: StudentRowItem[];
 }
+
+const EMPTY_CLASSES: ClassDetailDto[] = [];
+const EMPTY_SESSIONS: AttendanceSessionDetailDto[] = [];
 
 function normalizeGrade(gradeOrCode: string): string {
   if (!gradeOrCode) return "7";
@@ -69,44 +78,6 @@ function normalizeKey(str: string): string {
   if (!str) return "";
   return str.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
-
-// Default standard students data from reference
-const DEFAULT_STUDENTS_PER_CLASS: Record<string, StudentRowItem[]> = {
-  "7a": [
-    { id: 101, name: "Aditya Pratama", nis: "20260701", gender: "L", status: "Hadir" },
-    { id: 102, name: "Alya Zahra", nis: "20260702", gender: "P", status: "Izin" },
-    { id: 103, name: "Bagas Saputra", nis: "20260703", gender: "L", status: "Hadir" },
-    { id: 104, name: "Citra Kirana", nis: "20260704", gender: "P", status: "Sakit" },
-    { id: 105, name: "Dimas Anggara", nis: "20260705", gender: "L", status: "Hadir" },
-    { id: 106, name: "Eka Wahyuni", nis: "20260706", gender: "P", status: "Hadir" },
-    { id: 107, name: "Fajar Nugraha", nis: "20260707", gender: "L", status: "Hadir" },
-    { id: 108, name: "Gita Permata", nis: "20260708", gender: "P", status: "Hadir" },
-  ],
-  "7b": [
-    { id: 201, name: "Ahmad Fauzan", nis: "20260711", gender: "L", status: "Hadir" },
-    { id: 202, name: "Bella Safitri", nis: "20260712", gender: "P", status: "Hadir" },
-    { id: 203, name: "Candra Wijaya", nis: "20260713", gender: "L", status: "Izin" },
-    { id: 204, name: "Dewi Lestari", nis: "20260714", gender: "P", status: "Hadir" },
-    { id: 205, name: "Eko Prasetyo", nis: "20260715", gender: "L", status: "Hadir" },
-  ],
-  "7c": [
-    { id: 301, name: "Farhan Maulana", nis: "20260721", gender: "L", status: "Hadir" },
-    { id: 302, name: "Gita Permata", nis: "20260722", gender: "P", status: "Sakit" },
-    { id: 303, name: "Hendra Gunawan", nis: "20260723", gender: "L", status: "Hadir" },
-    { id: 304, name: "Indah Puspita", nis: "20260724", gender: "P", status: "Hadir" },
-  ],
-  "8a": [
-    { id: 401, name: "Salwa Alifa", nis: "20250801", gender: "P", status: "Hadir" },
-    { id: 402, name: "Taufik Hidayat", nis: "20250802", gender: "L", status: "Hadir" },
-    { id: 403, name: "Umar Bakri", nis: "20250803", gender: "L", status: "Izin" },
-    { id: 404, name: "Vina Panduwinata", nis: "20250804", gender: "P", status: "Hadir" },
-  ],
-  "9a": [
-    { id: 501, name: "Wahyu Ramadhan", nis: "20240901", gender: "L", status: "Hadir" },
-    { id: 502, name: "Yuliana Putri", nis: "20240902", gender: "P", status: "Hadir" },
-    { id: 503, name: "Zaki Mubarak", nis: "20240903", gender: "L", status: "Alpa" },
-  ],
-};
 
 function statusToFrontend(s: string): StudentAttendanceStatus {
   if (s === "PRESENT" || s === "Hadir") return "Hadir";
@@ -144,7 +115,7 @@ export default function ManajemenAbsensiPage() {
 
   // Queries
   const { data: classesData } = useClasses({ per_page: 100 });
-  const classes = classesData?.data || [];
+  const classes = classesData?.data ?? EMPTY_CLASSES;
 
   const { data: teachersData } = useTeachers({ per_page: 100 });
   const teachers = teachersData?.data || [];
@@ -156,56 +127,22 @@ export default function ManajemenAbsensiPage() {
     date: activeDate,
     per_page: 100,
   });
-  const backendSessions = sessionsData?.data || [];
+  const backendSessions = sessionsData?.data ?? EMPTY_SESSIONS;
 
   const updateRecordsMutation = useUpdateAttendanceRecords();
 
   // Local Attendance Sessions state dictionary: classKey -> ClassSessionItem
   const [attendanceSessions, setAttendanceSessions] = React.useState<
     Record<string, ClassSessionItem>
-  >(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("attendly_attendance_sessions_v2");
-        if (saved) {
-          return JSON.parse(saved);
-        }
-      } catch (e) {
-        console.error("Failed to parse attendance sessions", e);
-      }
-    }
-    return {};
-  });
+  >({});
 
   const saveAttendanceSessions = (data: Record<string, ClassSessionItem>) => {
     setAttendanceSessions(data);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("attendly_attendance_sessions_v2", JSON.stringify(data));
-    }
   };
 
   // Group classes by Tingkat (7, 8, 9)
-  const displayClasses = React.useMemo(() => {
-    if (classes.length > 0) return classes;
-    // Fallback default classes matching AppSheet reference
-    const mock: ClassDetailDto[] = [];
-    ["7", "8", "9"].forEach((t) => {
-      ["A", "B", "C", "D", "E", "F"].forEach((sec) => {
-        mock.push({
-          id: `${t}${sec.toLowerCase()}`,
-          code: `${t}${sec}`,
-          name: `Kelas ${t}${sec}`,
-          grade: t,
-          section: sec,
-          total_students: 32,
-          homeroom_teacher_name: sec === "A" ? "Budi Santoso, M.Pd." : "Siti Rahmawati, S.Pd.",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      });
-    });
-    return mock;
-  }, [classes]);
+  // Never fabricate classes when the API has no results.
+  const displayClasses = classes;
 
   const classesByTingkat = React.useMemo(() => {
     const map: Record<string, ClassDetailDto[]> = { "7": [], "8": [], "9": [] };
@@ -220,86 +157,88 @@ export default function ManajemenAbsensiPage() {
     return map;
   }, [displayClasses]);
 
-  // Sync / Initialize attendanceSessions with classes and backend sessions
+  // Attendance is based only on real sessions returned for the selected date.
   React.useEffect(() => {
-    if (displayClasses.length === 0) return;
+    const updated: Record<string, ClassSessionItem> = {};
 
-    setAttendanceSessions((prev) => {
-      const updated = { ...prev };
-      let changed = false;
+    for (const session of backendSessions) {
+      const classInfo = displayClasses.find((item) => item.id === session.class_id);
+      if (!classInfo) continue;
 
-      displayClasses.forEach((c) => {
-        const key = normalizeKey(c.code);
+      const records = session.records ?? [];
 
-        // Check if there's a backend session for this class
-        const matchedBackendSession = backendSessions.find(
-          (bs) => bs.class_id === c.id || normalizeKey(bs.class_name) === key
-        );
+      updated[normalizeKey(classInfo.code)] = {
+        id: session.id,
+        classId: classInfo.id,
+        className: classInfo.name,
+        code: classInfo.code,
+        tingkat: normalizeGrade(classInfo.grade || classInfo.code),
+        mapel: session.subject_name,
+        teacher: session.teacher_name,
+        jam: new Date(session.held_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        status: session.status === "SUBMITTED" ? "Selesai Diabsen" : "Sedang Berlangsung",
+        submitTime: session.submitted_at ? new Date(session.submitted_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
+        presentCount: session.present_count,
+        excusedCount: session.excused_count,
+        sickCount: session.sick_count,
+        absentCount: session.absent_count,
+        totalStudents: session.total_students,
+        students: records.map((record) => ({
+          id: record.student_id,
+          name: record.student_name,
+          nis: record.student_nis || "",
+          status: statusToFrontend(record.status),
+        })),
+      };
+    }
 
-        if (matchedBackendSession) {
-          // Map backend session records
-          const mappedStudents: StudentRowItem[] = (
-            matchedBackendSession.records || []
-          ).map((r, idx) => ({
-            id: r.student_id || idx + 1,
-            name: r.student_name,
-            nis: r.student_nis || `20260${idx + 10}`,
-            status: statusToFrontend(r.status),
-          }));
-
-          updated[key] = {
-            id: matchedBackendSession.id,
-            classId: c.id,
-            className: c.name,
-            code: c.code,
-            tingkat: normalizeGrade(c.grade || c.code),
-            mapel: matchedBackendSession.subject_name || "Bahasa Indonesia",
-            teacher: matchedBackendSession.teacher_name || c.homeroom_teacher_name || "Siti Rahmawati, S.Pd.",
-            jam: "07.40 - 09.00 WIB",
-            status:
-              matchedBackendSession.status === "SUBMITTED"
-                ? "Selesai Diabsen"
-                : "Sedang Berlangsung",
-            submitTime: "08:30 WIB",
-            students:
-              mappedStudents.length > 0
-                ? mappedStudents
-                : DEFAULT_STUDENTS_PER_CLASS[key] || DEFAULT_STUDENTS_PER_CLASS["7a"],
+    setAttendanceSessions((previous) => {
+      const next: Record<string, ClassSessionItem> = { ...previous };
+      for (const [key, val] of Object.entries(updated)) {
+        if (!next[key]) {
+          next[key] = val;
+        } else {
+          next[key] = {
+            ...val,
+            students: next[key].students.length > 0 ? next[key].students : val.students,
           };
-          changed = true;
-        } else if (!updated[key]) {
-          // Initialize with default session data
-          const defaultStudents =
-            DEFAULT_STUDENTS_PER_CLASS[key] ||
-            DEFAULT_STUDENTS_PER_CLASS["7a"] ||
-            [];
-
-          updated[key] = {
-            id: `local-session-${key}`,
-            classId: c.id,
-            className: c.name,
-            code: c.code,
-            tingkat: normalizeGrade(c.grade || c.code),
-            mapel: key.endsWith("a") ? "Bahasa Indonesia" : key.endsWith("b") ? "Matematika" : "IPA",
-            teacher: c.homeroom_teacher_name || "Siti Rahmawati, S.Pd.",
-            jam: "07.40 - 09.00 WIB",
-            status: "Selesai Diabsen",
-            submitTime: "08:30 WIB",
-            students: defaultStudents.map((st) => ({ ...st })),
-          };
-          changed = true;
         }
-      });
-
-      if (changed) {
-        saveAttendanceSessions(updated);
       }
-      return updated;
+      return JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
     });
-  }, [displayClasses, backendSessions]);
+  }, [backendSessions, displayClasses]);
 
   // Current session in Tier 3
-  const currentSession = attendanceSessions[selectedClassId] || attendanceSessions["7a"];
+  const currentSession = attendanceSessions[selectedClassId];
+
+  // Fetch detailed attendance session (which includes records) when in Tier 3
+  const { data: sessionDetail, isLoading: isLoadingSessionDetail } = useAttendanceSession(
+    currentTier === 3 && currentSession ? currentSession.id : null
+  );
+
+  React.useEffect(() => {
+    if (sessionDetail?.records && sessionDetail.records.length > 0 && selectedClassId) {
+      const detailStudents: StudentRowItem[] = sessionDetail.records.map((record) => ({
+        id: record.student_id,
+        name: record.student_name,
+        nis: record.student_nis || "",
+        status: statusToFrontend(record.status),
+      }));
+
+      setAttendanceSessions((prev) => {
+        const existing = prev[selectedClassId];
+        if (!existing) return prev;
+        if (existing.students.length === detailStudents.length) return prev;
+        return {
+          ...prev,
+          [selectedClassId]: {
+            ...existing,
+            students: detailStudents,
+          },
+        };
+      });
+    }
+  }, [sessionDetail, selectedClassId]);
 
   // Navigation Handlers
   const handleOpenTingkat = (tingkat: string) => {
@@ -350,36 +289,38 @@ export default function ManajemenAbsensiPage() {
   const handleSaveAttendance = async () => {
     if (!currentSession) return;
 
-    // If there is an actual backend session, call mutation
-    if (
-      currentSession.id &&
-      !currentSession.id.startsWith("local-") &&
-      currentSession.students.length > 0
-    ) {
-      try {
-        await updateRecordsMutation.mutateAsync({
-          id: currentSession.id,
-          data: {
-            version: 1,
-            records: currentSession.students.map((st) => ({
-              student_id: String(st.id),
-              status: statusToBackend(st.status),
-              remarks: overrideReason || "Update oleh Administrator",
-            })),
-          },
-        });
-      } catch (err) {
-        console.warn("Backend update note (proceeding with local update):", err);
-      }
+    try {
+      await updateRecordsMutation.mutateAsync({
+        id: currentSession.id,
+        data: {
+          version: 1,
+          records: currentSession.students.map((st) => ({
+            student_id: String(st.id),
+            status: statusToBackend(st.status),
+            remarks: overrideReason || "Update oleh Administrator",
+          })),
+        },
+      });
+      await refetchSessions();
+      showToast(`Pembaruan presensi ${currentSession.className} berhasil disimpan!`);
+      setCurrentTier(2);
+    } catch {
+      showToast("Gagal menyimpan perubahan presensi. Data backend tidak berubah.");
     }
-
-    showToast(`Pembaruan presensi ${currentSession.className} berhasil disimpan!`);
-    setCurrentTier(2);
   };
 
   // Calculate live counters for Tier 3
   const counters = React.useMemo(() => {
     if (!currentSession) return { hadir: 0, izin: 0, sakit: 0, alpa: 0, total: 0 };
+    if (!currentSession.students || currentSession.students.length === 0) {
+      return {
+        hadir: currentSession.presentCount ?? 0,
+        izin: currentSession.excusedCount ?? 0,
+        sakit: currentSession.sickCount ?? 0,
+        alpa: currentSession.absentCount ?? 0,
+        total: currentSession.totalStudents ?? 0,
+      };
+    }
     let hadir = 0,
       izin = 0,
       sakit = 0,
@@ -528,27 +469,21 @@ export default function ManajemenAbsensiPage() {
           <div className="space-y-3.5">
             {(classesByTingkat[selectedTingkat] || []).map((c) => {
               const key = normalizeKey(c.code);
-              const session = attendanceSessions[key] || {
-                className: c.name,
-                code: c.code,
-                mapel: "Bahasa Indonesia",
-                teacher: c.homeroom_teacher_name || "Siti Rahmawati, S.Pd.",
-                jam: "07.40 - 09.00 WIB",
-                status: "Selesai Diabsen",
-                submitTime: "08:30 WIB",
-                students: DEFAULT_STUDENTS_PER_CLASS[key] || DEFAULT_STUDENTS_PER_CLASS["7a"],
-              };
+              const session = attendanceSessions[key];
+              if (!session) return null;
 
-              let h = 0,
-                i = 0,
-                s = 0,
-                a = 0;
-              (session.students || []).forEach((st) => {
-                if (st.status === "Hadir") h++;
-                else if (st.status === "Izin") i++;
-                else if (st.status === "Sakit") s++;
-                else if (st.status === "Alpa") a++;
-              });
+              const h =
+                session.presentCount ??
+                (session.students || []).filter((st) => st.status === "Hadir").length;
+              const i =
+                session.excusedCount ??
+                (session.students || []).filter((st) => st.status === "Izin").length;
+              const s =
+                session.sickCount ??
+                (session.students || []).filter((st) => st.status === "Sakit").length;
+              const a =
+                session.absentCount ??
+                (session.students || []).filter((st) => st.status === "Alpa").length;
 
               return (
                 <div
@@ -691,55 +626,70 @@ export default function ManajemenAbsensiPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
-                  {currentSession.students.map((st, idx) => (
-                    <tr key={st.id} className="hover:bg-slate-50/70 transition">
-                      <td className="px-6 py-4 text-center font-bold text-slate-400 text-xs">
-                        {idx + 1}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">{st.name}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{st.nis}</div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="inline-flex items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100 rounded-full border border-slate-200">
-                          {(["Hadir", "Izin", "Sakit", "Alpa"] as StudentAttendanceStatus[]).map(
-                            (opt) => {
-                              const isActive = st.status === opt;
-                              return (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  onClick={() => handleSetStudentStatus(st.id, opt)}
-                                  className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
-                                    isActive
-                                      ? "bg-slate-900 text-white shadow-xs"
-                                      : "text-slate-600 hover:text-slate-900"
-                                  }`}
-                                >
-                                  {opt}
-                                </button>
-                              );
-                            }
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            st.status === "Hadir"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : st.status === "Izin"
-                              ? "bg-blue-100 text-blue-800"
-                              : st.status === "Sakit"
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-rose-100 text-rose-800"
-                          }`}
-                        >
-                          {st.status}
-                        </span>
+                  {isLoadingSessionDetail && (!currentSession.students || currentSession.students.length === 0) ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto text-[#0c3960] mb-2" />
+                        <span>Memuat data siswa dan catatan kehadiran...</span>
                       </td>
                     </tr>
-                  ))}
+                  ) : currentSession.students && currentSession.students.length > 0 ? (
+                    currentSession.students.map((st, idx) => (
+                      <tr key={st.id} className="hover:bg-slate-50/70 transition">
+                        <td className="px-6 py-4 text-center font-bold text-slate-400 text-xs">
+                          {idx + 1}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-900">{st.name}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{st.nis}</div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <div className="inline-flex items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100 rounded-full border border-slate-200">
+                            {(["Hadir", "Izin", "Sakit", "Alpa"] as StudentAttendanceStatus[]).map(
+                              (opt) => {
+                                const isActive = st.status === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => handleSetStudentStatus(st.id, opt)}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+                                      isActive
+                                        ? "bg-slate-900 text-white shadow-xs"
+                                        : "text-slate-600 hover:text-slate-900"
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              }
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              st.status === "Hadir"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : st.status === "Izin"
+                                ? "bg-blue-100 text-blue-800"
+                                : st.status === "Sakit"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}
+                          >
+                            {st.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                        Belum ada catatan presensi siswa untuk sesi kelas ini.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

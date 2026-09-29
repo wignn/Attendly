@@ -422,7 +422,7 @@ export default function GuruPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-slate-600 text-xs">
-                      {t.phone ? (
+                      {t.phone?.trim() ? (
                         <div className="flex items-center gap-1.5">
                           <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                           <span>{t.phone}</span>

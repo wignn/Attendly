@@ -160,7 +160,7 @@ export default function JadwalKelasPage() {
   const { data: subjectsData } = useSubjects({ per_page: 100 });
   const subjects = subjectsData?.data || [];
 
-  const { data: schedulesData } = useSchedules({ per_page: 300 });
+  const { data: schedulesData } = useSchedules({ per_page: 100 });
   const backendSchedules = schedulesData?.data || [];
 
   // Local storage for time slots
@@ -228,7 +228,9 @@ export default function JadwalKelasPage() {
           }
 
           const dayName = DAY_MAP_NUM_TO_NAME[bs.day_of_week] || "Senin";
-          const formattedTime = `${formatTimeDisplay(bs.starts_at)} - ${formatTimeDisplay(bs.ends_at)}`;
+          const formattedTime = bs.period_no
+            ? `Jam ke-${bs.period_no}`
+            : `${formatTimeDisplay(bs.starts_at ?? "")} - ${formatTimeDisplay(bs.ends_at ?? "")}`;
 
           const matchedSubject = subjects.find((s) => s.id === bs.subject_id);
           const matchedTeacher = teachers.find((t) => t.id === bs.teacher_id);

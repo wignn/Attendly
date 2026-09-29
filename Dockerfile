@@ -1,4 +1,4 @@
-# jangan ganti file ini. udah compatible dengan koyeb
+# syntax=docker/dockerfile:1.7
 FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
@@ -9,7 +9,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY apps/api/ ./
 
-# Build static binaries with stripped symbols for a smaller runtime image.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server && \
