@@ -208,7 +208,7 @@ func (r *AttendanceSessionRepo) GetByID(ctx context.Context, id uuid.UUID) (*dom
 	sess.Status = domain.AttendanceSessionStatus(statusStr)
 
 	// Fetch records
-	recQuery := `SELECT ar.student_id, st.student_number, st.full_name, ar.status, ar.remarks, ar.recorded_at, ar.updated_at
+	recQuery := `SELECT ar.student_id, COALESCE(st.student_number,''), st.full_name, ar.status, ar.remarks, ar.recorded_at, ar.updated_at
 		FROM attendance_records ar
 		JOIN students st ON st.id = ar.student_id
 		WHERE ar.session_id = $1

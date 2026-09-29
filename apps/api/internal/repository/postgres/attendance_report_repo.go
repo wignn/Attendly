@@ -100,7 +100,7 @@ func (r *AttendanceReportRepo) teacherCounts(ctx context.Context, teacherID uuid
 }
 
 func (r *AttendanceReportRepo) StudentSummary(ctx context.Context, studentID uuid.UUID) (domain.StudentAttendanceSummary, error) {
-	query := `SELECT st.id, st.student_number, st.full_name, st.class_id, st.active,
+	query := `SELECT st.id, COALESCE(st.student_number,''), st.full_name, st.class_id, st.active,
 		COUNT(ar.student_id) FILTER (WHERE ar.status = 'PRESENT')::bigint,
 		COUNT(ar.student_id) FILTER (WHERE ar.status = 'EXCUSED')::bigint,
 		COUNT(ar.student_id) FILTER (WHERE ar.status = 'SICK')::bigint,
@@ -177,7 +177,7 @@ func (r *AttendanceReportRepo) classReport(ctx context.Context, classID uuid.UUI
 		return result, 0, err
 	}
 	result.Rate = result.Counts.AttendanceRate()
-	query = `SELECT st.id,st.student_number,st.full_name,st.class_id,st.active,
+	query = `SELECT st.id,COALESCE(st.student_number,''),st.full_name,st.class_id,st.active,
 		COUNT(ar.student_id) FILTER (WHERE s.id IS NOT NULL AND ar.status = 'PRESENT')::bigint,
 		COUNT(ar.student_id) FILTER (WHERE s.id IS NOT NULL AND ar.status = 'EXCUSED')::bigint,
 		COUNT(ar.student_id) FILTER (WHERE s.id IS NOT NULL AND ar.status = 'SICK')::bigint,

@@ -143,12 +143,22 @@ func TestStudentServiceCreateNormalizesAndDefaultsDateInJakarta(t *testing.T) {
 	}
 }
 
+func TestStudentServiceCreateAllowsMissingNIS(t *testing.T) {
+	repo := &studentRepoStub{}
+	_, err := NewStudentService(repo).Create(context.Background(), adminUser(), StudentCreateInput{FullName: "Ada", ClassID: uuid.New()})
+	if err != nil {
+		t.Fatalf("Create with missing NIS error = %v, want nil", err)
+	}
+	if repo.createCalls != 1 || repo.created.NIS != "" {
+		t.Fatalf("repo create calls=%d, NIS=%q, want one call and blank NIS", repo.createCalls, repo.created.NIS)
+	}
+}
+
 func TestStudentServiceCreateValidation(t *testing.T) {
 	cases := []struct {
 		name  string
 		input StudentCreateInput
 	}{
-		{"missing NIS", StudentCreateInput{FullName: "Ada", ClassID: uuid.New()}},
 		{"missing name", StudentCreateInput{NIS: "001", ClassID: uuid.New()}},
 		{"missing class", StudentCreateInput{NIS: "001", FullName: "Ada"}},
 		{"zero date", StudentCreateInput{NIS: "001", FullName: "Ada", ClassID: uuid.New(), EffectiveOn: timePtr(time.Time{})}},

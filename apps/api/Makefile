@@ -1,4 +1,4 @@
-.PHONY: dev build test lint tidy migrate-up migrate-down sqlc
+.PHONY: dev build test lint tidy migrate-up migrate-down seed sqlc
 
 dev:
 	go run cmd/server/main.go
@@ -21,6 +21,9 @@ migrate-up:
 
 migrate-down:
 	go run cmd/migrate/main.go down
+
+seed:
+	go run cmd/seed/main.go
 
 sqlc:
 	sqlc generate

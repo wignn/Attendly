@@ -91,18 +91,31 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.StructuredLogger(appLogger))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8080", "https://attendly-api-three.vercel.app", "https://attendly-web-six.vercel.app", "https://komas.netlify.app","*"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8080", "https://attendly-api-three.vercel.app", "https://attendly-web-six.vercel.app", "https://komas.netlify.app","https://attendly-api-chi.vercel.app", "https://attendly-web-chi.vercel.app" },
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+	openAPIJSON, err := docs.OpenAPIJSON()
+	if err != nil {
+		appLogger.Error("Failed to convert OpenAPI spec to JSON", "error", err)
+	}
+
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Get("/swagger/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
 		_, _ = w.Write(docs.OpenAPI)
 	})
-	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/openapi.yaml")))
+	r.Get("/swagger/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(openAPIJSON)
+	})
+	r.Get("/swagger/doc.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(openAPIJSON)
+	})
+	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 	r.Get("/redoc", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>AbsenKu API Reference</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><redoc spec-url="/swagger/openapi.yaml"></redoc><script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script></body></html>`))

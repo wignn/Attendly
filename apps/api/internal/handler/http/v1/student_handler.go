@@ -33,7 +33,7 @@ func NewStudentHandler(svc StudentService) *StudentHandler { return &StudentHand
 
 type studentResponse struct {
 	ID               uuid.UUID  `json:"id"`
-	NIS              string     `json:"nis"`
+	NIS              *string    `json:"nis"`
 	NISN             *string    `json:"nisn,omitempty"`
 	FullName         string     `json:"full_name"`
 	CurrentClassID   uuid.UUID  `json:"class_id"`
@@ -71,8 +71,13 @@ func projectStudent(record domain.StudentRecord) studentResponse {
 	if record.Active {
 		status = "ACTIVE"
 	}
+	var nis *string
+	if record.NIS != "" {
+		value := record.NIS
+		nis = &value
+	}
 	return studentResponse{
-		ID: record.ID, NIS: record.NIS, NISN: record.NISN, FullName: record.FullName,
+		ID: record.ID, NIS: nis, NISN: record.NISN, FullName: record.FullName,
 		CurrentClassID: record.CurrentClassID, CurrentClassName: record.CurrentClassName,
 		Status: status, DeletedAt: record.DeletedAt, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
 	}
@@ -87,7 +92,7 @@ func projectStudents(records []domain.StudentRecord) []studentResponse {
 }
 
 type studentCreateRequest struct {
-	NIS         string  `json:"nis"`
+	NIS         *string `json:"nis"`
 	NISN        *string `json:"nisn"`
 	FullName    string  `json:"full_name"`
 	ClassID     string  `json:"class_id"`
@@ -189,7 +194,11 @@ func (h *StudentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if date != nil {
 		effective = date
 	}
-	data, err := h.service.Create(r.Context(), middleware.GetAuthenticatedUser(r.Context()), service.StudentCreateInput{NIS: req.NIS, NISN: req.NISN, FullName: req.FullName, ClassID: classID, EffectiveOn: effective})
+	nis := ""
+	if req.NIS != nil {
+		nis = *req.NIS
+	}
+	data, err := h.service.Create(r.Context(), middleware.GetAuthenticatedUser(r.Context()), service.StudentCreateInput{NIS: nis, NISN: req.NISN, FullName: req.FullName, ClassID: classID, EffectiveOn: effective})
 	if err != nil {
 		writeStudentError(w, err)
 		return

@@ -93,7 +93,7 @@ func (s *StudentService) Create(ctx context.Context, user *domain.User, input St
 	}
 	input.NIS = strings.TrimSpace(input.NIS)
 	input.FullName = strings.TrimSpace(input.FullName)
-	if input.NIS == "" || len(input.NIS) > 50 || input.FullName == "" || len(input.FullName) > 255 || input.ClassID == uuid.Nil {
+	if len(input.NIS) > 50 || input.FullName == "" || len(input.FullName) > 255 || input.ClassID == uuid.Nil {
 		return domain.StudentRecord{}, domain.ErrValidation
 	}
 	nisn, err := normalizeOptionalIdentifier(input.NISN)

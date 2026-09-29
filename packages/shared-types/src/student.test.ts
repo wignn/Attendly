@@ -37,14 +37,27 @@ describe("Student Types Validation", () => {
     expect(result.success).toBe(true);
   });
 
-  it("should reject student create with missing NIS", () => {
-    const payload = {
-      nis: "",
+  it("should allow student create with null or omitted NIS", () => {
+    const base = {
       full_name: "Aditya Pratama",
       class_id: "22222222-2222-4222-8222-222222222222",
     };
-    const result = StudentCreateSchema.safeParse(payload);
-    expect(result.success).toBe(false);
+    expect(StudentCreateSchema.safeParse({ ...base, nis: null }).success).toBe(true);
+    expect(StudentCreateSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("should allow null NIS on student records", () => {
+    const result = StudentRecordSchema.safeParse({
+      id: "11111111-1111-4111-8111-111111111111",
+      nis: null,
+      full_name: "Aditya Pratama",
+      class_id: "22222222-2222-4222-8222-222222222222",
+      current_class_name: "7A",
+      status: "ACTIVE",
+      created_at: "2026-09-26T10:00:00Z",
+      updated_at: "2026-09-26T10:00:00Z",
+    });
+    expect(result.success).toBe(true);
   });
 
   it("should reject student create with invalid class_id uuid", () => {
