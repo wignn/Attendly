@@ -135,6 +135,28 @@ describe("Attendance Shared Types Validation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts period-based schedules with null clock times", () => {
+    const payload = {
+      id: "11111111-1111-4111-8111-111111111111",
+      teaching_assignment_id: "22222222-2222-4222-8222-222222222222",
+      teacher_id: "33333333-3333-4333-8333-333333333333",
+      class_id: "44444444-4444-4444-8444-444444444444",
+      subject_id: "55555555-5555-4555-8555-555555555555",
+      academic_year_id: "66666666-6666-4666-8666-666666666666",
+      day_of_week: 1,
+      period_no: 3,
+      starts_at: null,
+      ends_at: null,
+      effective_from: "2026-09-01",
+      effective_until: null,
+      active: true,
+      created_at: "2026-09-01T00:00:00Z",
+      updated_at: "2026-09-01T00:00:00Z",
+    };
+
+    expect(ScheduleItemSchema.safeParse(payload).success).toBe(true);
+  });
+
   it("should validate schedule item payload", () => {
     const payload = {
       id: "11111111-1111-4111-8111-111111111111",

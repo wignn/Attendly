@@ -42,6 +42,8 @@ func (r *scheduleRepoStub) Delete(_ context.Context, _ uuid.UUID, _ uuid.UUID) e
 	return r.err
 }
 
+func scheduleStringPtr(value string) *string { return &value }
+
 func TestScheduleCreateRejectsNonAdminAndInvalidInterval(t *testing.T) {
 	repo := &scheduleRepoStub{}
 	svc := NewScheduleService(repo)
@@ -106,9 +108,23 @@ func TestScheduleListOnDateMatchesWeekday(t *testing.T) {
 	}
 }
 
+func TestValidateScheduleAcceptsPeriodBasedSchedule(t *testing.T) {
+	period := 3
+	item := &domain.Schedule{
+		TeachingAssignmentID: uuid.New(),
+		DayOfWeek:            1,
+		PeriodNo:             &period,
+		EffectiveFrom:        "2026-09-01",
+		Active:               true,
+	}
+	if err := validateSchedule(item); err != nil {
+		t.Fatalf("period-based schedule should be valid: %v", err)
+	}
+}
+
 func TestScheduleUpdatePreservesRecordIDAndRejectsInvalidDateRange(t *testing.T) {
 	id := uuid.New()
-	repo := &scheduleRepoStub{item: &domain.Schedule{ID: id, TeachingAssignmentID: uuid.New(), DayOfWeek: 2, StartsAt: "08:00", EndsAt: "09:00", EffectiveFrom: "2026-09-01", Active: true}}
+	repo := &scheduleRepoStub{item: &domain.Schedule{ID: id, TeachingAssignmentID: uuid.New(), DayOfWeek: 2, StartsAt: scheduleStringPtr("08:00"), EndsAt: scheduleStringPtr("09:00"), EffectiveFrom: "2026-09-01", Active: true}}
 	svc := NewScheduleService(repo)
 	admin := &domain.User{ID: uuid.New(), IsActive: true, Role: domain.RoleSuperAdmin}
 	until := "2026-08-31"
