@@ -73,44 +73,6 @@ function normalizeKey(str: string): string {
   return str.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-// Default standard students data from reference
-const DEFAULT_STUDENTS_PER_CLASS: Record<string, StudentRowItem[]> = {
-  "7a": [
-    { id: 101, name: "Aditya Pratama", nis: "20260701", gender: "L", status: "Hadir" },
-    { id: 102, name: "Alya Zahra", nis: "20260702", gender: "P", status: "Izin" },
-    { id: 103, name: "Bagas Saputra", nis: "20260703", gender: "L", status: "Hadir" },
-    { id: 104, name: "Citra Kirana", nis: "20260704", gender: "P", status: "Sakit" },
-    { id: 105, name: "Dimas Anggara", nis: "20260705", gender: "L", status: "Hadir" },
-    { id: 106, name: "Eka Wahyuni", nis: "20260706", gender: "P", status: "Hadir" },
-    { id: 107, name: "Fajar Nugraha", nis: "20260707", gender: "L", status: "Hadir" },
-    { id: 108, name: "Gita Permata", nis: "20260708", gender: "P", status: "Hadir" },
-  ],
-  "7b": [
-    { id: 201, name: "Ahmad Fauzan", nis: "20260711", gender: "L", status: "Hadir" },
-    { id: 202, name: "Bella Safitri", nis: "20260712", gender: "P", status: "Hadir" },
-    { id: 203, name: "Candra Wijaya", nis: "20260713", gender: "L", status: "Izin" },
-    { id: 204, name: "Dewi Lestari", nis: "20260714", gender: "P", status: "Hadir" },
-    { id: 205, name: "Eko Prasetyo", nis: "20260715", gender: "L", status: "Hadir" },
-  ],
-  "7c": [
-    { id: 301, name: "Farhan Maulana", nis: "20260721", gender: "L", status: "Hadir" },
-    { id: 302, name: "Gita Permata", nis: "20260722", gender: "P", status: "Sakit" },
-    { id: 303, name: "Hendra Gunawan", nis: "20260723", gender: "L", status: "Hadir" },
-    { id: 304, name: "Indah Puspita", nis: "20260724", gender: "P", status: "Hadir" },
-  ],
-  "8a": [
-    { id: 401, name: "Salwa Alifa", nis: "20250801", gender: "P", status: "Hadir" },
-    { id: 402, name: "Taufik Hidayat", nis: "20250802", gender: "L", status: "Hadir" },
-    { id: 403, name: "Umar Bakri", nis: "20250803", gender: "L", status: "Izin" },
-    { id: 404, name: "Vina Panduwinata", nis: "20250804", gender: "P", status: "Hadir" },
-  ],
-  "9a": [
-    { id: 501, name: "Wahyu Ramadhan", nis: "20240901", gender: "L", status: "Hadir" },
-    { id: 502, name: "Yuliana Putri", nis: "20240902", gender: "P", status: "Hadir" },
-    { id: 503, name: "Zaki Mubarak", nis: "20240903", gender: "L", status: "Alpa" },
-  ],
-};
-
 function statusToFrontend(s: string): StudentAttendanceStatus {
   if (s === "PRESENT" || s === "Hadir") return "Hadir";
   if (s === "EXCUSED" || s === "Izin") return "Izin";
@@ -166,49 +128,15 @@ export default function ManajemenAbsensiPage() {
   // Local Attendance Sessions state dictionary: classKey -> ClassSessionItem
   const [attendanceSessions, setAttendanceSessions] = React.useState<
     Record<string, ClassSessionItem>
-  >(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("attendly_attendance_sessions_v2");
-        if (saved) {
-          return JSON.parse(saved);
-        }
-      } catch (e) {
-        console.error("Failed to parse attendance sessions", e);
-      }
-    }
-    return {};
-  });
+  >({});
 
   const saveAttendanceSessions = (data: Record<string, ClassSessionItem>) => {
     setAttendanceSessions(data);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("attendly_attendance_sessions_v2", JSON.stringify(data));
-    }
   };
 
   // Group classes by Tingkat (7, 8, 9)
-  const displayClasses = React.useMemo(() => {
-    if (classes.length > 0) return classes;
-    // Fallback default classes matching AppSheet reference
-    const mock: ClassDetailDto[] = [];
-    ["7", "8", "9"].forEach((t) => {
-      ["A", "B", "C", "D", "E", "F"].forEach((sec) => {
-        mock.push({
-          id: `${t}${sec.toLowerCase()}`,
-          code: `${t}${sec}`,
-          name: `Kelas ${t}${sec}`,
-          grade: t,
-          section: sec,
-          total_students: 32,
-          homeroom_teacher_name: sec === "A" ? "Budi Santoso, M.Pd." : "Siti Rahmawati, S.Pd.",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      });
-    });
-    return mock;
-  }, [classes]);
+  // Never fabricate classes when the API has no results.
+  const displayClasses = classes;
 
   const classesByTingkat = React.useMemo(() => {
     const map: Record<string, ClassDetailDto[]> = { "7": [], "8": [], "9": [] };
@@ -223,83 +151,41 @@ export default function ManajemenAbsensiPage() {
     return map;
   }, [displayClasses]);
 
-  // Sync / Initialize attendanceSessions with classes and backend sessions.
-  // Return the previous object when its content is unchanged to avoid an effect render loop.
+  // Attendance is based only on real sessions returned for the selected date.
   React.useEffect(() => {
-    if (displayClasses.length === 0) return;
+    const updated: Record<string, ClassSessionItem> = {};
 
-    setAttendanceSessions((prev) => {
-      const updated = { ...prev };
+    for (const session of backendSessions) {
+      const classInfo = displayClasses.find((item) => item.id === session.class_id);
+      if (!classInfo) continue;
 
-      displayClasses.forEach((c) => {
-        const key = normalizeKey(c.code);
-        const matchedBackendSession = backendSessions.find(
-          (bs) => bs.class_id === c.id || normalizeKey(bs.class_name) === key
-        );
-
-        if (matchedBackendSession) {
-          const mappedStudents: StudentRowItem[] = (
-            matchedBackendSession.records || []
-          ).map((r, idx) => ({
-            id: r.student_id || idx + 1,
-            name: r.student_name,
-            nis: r.student_nis || `20260${idx + 10}`,
-            status: statusToFrontend(r.status),
-          }));
-
-          updated[key] = {
-            id: matchedBackendSession.id,
-            classId: c.id,
-            className: c.name,
-            code: c.code,
-            tingkat: normalizeGrade(c.grade || c.code),
-            mapel: matchedBackendSession.subject_name || "Bahasa Indonesia",
-            teacher: matchedBackendSession.teacher_name || c.homeroom_teacher_name || "Siti Rahmawati, S.Pd.",
-            jam: "07.40 - 09.00 WIB",
-            status:
-              matchedBackendSession.status === "SUBMITTED"
-                ? "Selesai Diabsen"
-                : "Sedang Berlangsung",
-            submitTime: "08:30 WIB",
-            students:
-              mappedStudents.length > 0
-                ? mappedStudents
-                : DEFAULT_STUDENTS_PER_CLASS[key] || DEFAULT_STUDENTS_PER_CLASS["7a"],
-          };
-        } else if (!updated[key]) {
-          const defaultStudents =
-            DEFAULT_STUDENTS_PER_CLASS[key] ||
-            DEFAULT_STUDENTS_PER_CLASS["7a"] ||
-            [];
-
-          updated[key] = {
-            id: `local-session-${key}`,
-            classId: c.id,
-            className: c.name,
-            code: c.code,
-            tingkat: normalizeGrade(c.grade || c.code),
-            mapel: key.endsWith("a") ? "Bahasa Indonesia" : key.endsWith("b") ? "Matematika" : "IPA",
-            teacher: c.homeroom_teacher_name || "Siti Rahmawati, S.Pd.",
-            jam: "07.40 - 09.00 WIB",
-            status: "Selesai Diabsen",
-            submitTime: "08:30 WIB",
-            students: defaultStudents.map((st) => ({ ...st })),
-          };
-        }
-      });
-
-      return JSON.stringify(updated) === JSON.stringify(prev) ? prev : updated;
-    });
-  }, [displayClasses, backendSessions]);
-
-  React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("attendly_attendance_sessions_v2", JSON.stringify(attendanceSessions));
+      updated[normalizeKey(classInfo.code)] = {
+        id: session.id,
+        classId: classInfo.id,
+        className: classInfo.name,
+        code: classInfo.code,
+        tingkat: normalizeGrade(classInfo.grade || classInfo.code),
+        mapel: session.subject_name,
+        teacher: session.teacher_name,
+        jam: new Date(session.held_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        status: session.status === "SUBMITTED" ? "Selesai Diabsen" : "Sedang Berlangsung",
+        submitTime: session.submitted_at ? new Date(session.submitted_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
+        students: session.records.map((record) => ({
+          id: record.student_id,
+          name: record.student_name,
+          nis: record.student_nis || "",
+          status: statusToFrontend(record.status),
+        })),
+      };
     }
-  }, [attendanceSessions]);
+
+    setAttendanceSessions((previous) =>
+      JSON.stringify(previous) === JSON.stringify(updated) ? previous : updated
+    );
+  }, [backendSessions, displayClasses]);
 
   // Current session in Tier 3
-  const currentSession = attendanceSessions[selectedClassId] || attendanceSessions["7a"];
+  const currentSession = attendanceSessions[selectedClassId];
 
   // Navigation Handlers
   const handleOpenTingkat = (tingkat: string) => {
@@ -350,31 +236,24 @@ export default function ManajemenAbsensiPage() {
   const handleSaveAttendance = async () => {
     if (!currentSession) return;
 
-    // If there is an actual backend session, call mutation
-    if (
-      currentSession.id &&
-      !currentSession.id.startsWith("local-") &&
-      currentSession.students.length > 0
-    ) {
-      try {
-        await updateRecordsMutation.mutateAsync({
-          id: currentSession.id,
-          data: {
-            version: 1,
-            records: currentSession.students.map((st) => ({
-              student_id: String(st.id),
-              status: statusToBackend(st.status),
-              remarks: overrideReason || "Update oleh Administrator",
-            })),
-          },
-        });
-      } catch (err) {
-        console.warn("Backend update note (proceeding with local update):", err);
-      }
+    try {
+      await updateRecordsMutation.mutateAsync({
+        id: currentSession.id,
+        data: {
+          version: 1,
+          records: currentSession.students.map((st) => ({
+            student_id: String(st.id),
+            status: statusToBackend(st.status),
+            remarks: overrideReason || "Update oleh Administrator",
+          })),
+        },
+      });
+      await refetchSessions();
+      showToast(`Pembaruan presensi ${currentSession.className} berhasil disimpan!`);
+      setCurrentTier(2);
+    } catch {
+      showToast("Gagal menyimpan perubahan presensi. Data backend tidak berubah.");
     }
-
-    showToast(`Pembaruan presensi ${currentSession.className} berhasil disimpan!`);
-    setCurrentTier(2);
   };
 
   // Calculate live counters for Tier 3
@@ -528,16 +407,8 @@ export default function ManajemenAbsensiPage() {
           <div className="space-y-3.5">
             {(classesByTingkat[selectedTingkat] || []).map((c) => {
               const key = normalizeKey(c.code);
-              const session = attendanceSessions[key] || {
-                className: c.name,
-                code: c.code,
-                mapel: "Bahasa Indonesia",
-                teacher: c.homeroom_teacher_name || "Siti Rahmawati, S.Pd.",
-                jam: "07.40 - 09.00 WIB",
-                status: "Selesai Diabsen",
-                submitTime: "08:30 WIB",
-                students: DEFAULT_STUDENTS_PER_CLASS[key] || DEFAULT_STUDENTS_PER_CLASS["7a"],
-              };
+              const session = attendanceSessions[key];
+              if (!session) return null;
 
               let h = 0,
                 i = 0,
