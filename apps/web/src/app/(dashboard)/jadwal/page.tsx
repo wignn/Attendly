@@ -41,7 +41,8 @@ import { useTeachers, useCreateTeacher } from "@/hooks/use-teachers";
 import { useClasses, useCreateClass } from "@/hooks/use-classes";
 import { useSubjects, useCreateSubject } from "@/hooks/use-subjects";
 import { useAcademicYears } from "@/hooks/use-academic-years";
-import { ClassDetailDto } from "@komas/shared-types";
+import { ClassDetailDto, TeachingAssignmentRecordDto } from "@komas/shared-types";
+import { fetchPaginatedApi } from "@/lib/api-client";
 
 // Standard days of week for school schedule
 const DAYS_OF_WEEK = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
@@ -124,16 +125,61 @@ const DEFAULT_7A_SCHEDULE: ScheduleSlotItem[] = [
 
 function normalizeClassKey(str: string): string {
   if (!str) return "";
-  return str.toLowerCase().replace(/[^a-z0-9]/g, "");
+  let s = str.trim().toLowerCase();
+  s = s.replace(/^(kelas|cls)[-_ ]*/i, "");
+  s = s.replace(/^viii[-_ ]*/i, "8");
+  s = s.replace(/^vii[-_ ]*/i, "7");
+  s = s.replace(/^ix[-_ ]*/i, "9");
+  return s.replace(/[^a-z0-9]/g, "");
 }
 
 function normalizeGrade(gradeOrCode: string): string {
   if (!gradeOrCode) return "7";
   const upper = gradeOrCode.toUpperCase().trim();
-  if (upper.startsWith("7") || upper.startsWith("VII")) return "7";
-  if (upper.startsWith("8") || upper.startsWith("VIII")) return "8";
-  if (upper.startsWith("9") || upper.startsWith("IX")) return "9";
+  const cleaned = upper.replace(/^(CLS|KELAS)[-_ ]*/i, "");
+  if (cleaned.startsWith("7") || cleaned.startsWith("VII")) return "7";
+  if (cleaned.startsWith("8") || cleaned.startsWith("VIII")) return "8";
+  if (cleaned.startsWith("9") || cleaned.startsWith("IX")) return "9";
   return "7";
+}
+
+function getPeriodTimeRange(periodNo: number, dayOfWeek: number = 1): string {
+  if (dayOfWeek === 5) {
+    const map: Record<number, string> = {
+      1: "07.00 - 07.40",
+      2: "07.40 - 08.20",
+      3: "08.20 - 09.00",
+      4: "09.20 - 10.00",
+      5: "10.00 - 10.40",
+      6: "10.40 - 11.20",
+    };
+    return map[periodNo] || `Jam ke-${periodNo}`;
+  }
+  if (dayOfWeek === 1) {
+    const map: Record<number, string> = {
+      1: "07.40 - 08.20",
+      2: "08.20 - 09.00",
+      3: "09.00 - 09.40",
+      4: "10.00 - 10.40",
+      5: "10.40 - 11.20",
+      6: "11.20 - 12.00",
+      7: "12.40 - 13.20",
+      8: "13.20 - 14.00",
+    };
+    return map[periodNo] || `Jam ke-${periodNo}`;
+  }
+  const map: Record<number, string> = {
+    1: "07.00 - 07.40",
+    2: "07.40 - 08.20",
+    3: "08.20 - 09.00",
+    4: "09.00 - 09.40",
+    5: "10.00 - 10.40",
+    6: "10.40 - 11.20",
+    7: "12.00 - 12.40",
+    8: "12.40 - 13.20",
+    9: "13.20 - 14.00",
+  };
+  return map[periodNo] || `Jam ke-${periodNo}`;
 }
 
 function formatTimeDisplay(timeStr: string): string {
@@ -183,26 +229,6 @@ export default function JadwalKelasPage() {
   const classes = classesData?.data || [];
   const createClassMutation = useCreateClass();
 
-  const { data: teachersData, refetch: refetchTeachers } = useTeachers({ per_page: 100 });
-  const teachers = teachersData?.data || [];
-  const createTeacherMutation = useCreateTeacher();
-
-  const { data: subjectsData, refetch: refetchSubjects } = useSubjects({ per_page: 100 });
-  const subjects = subjectsData?.data || [];
-  const createSubjectMutation = useCreateSubject();
-
-  const { data: schedulesData, refetch: refetchSchedules } = useSchedules({ per_page: 100 });
-  const backendSchedules = schedulesData?.data || [];
-
-  const createScheduleMutation = useCreateSchedule();
-  const updateScheduleMutation = useUpdateSchedule();
-  const deleteScheduleMutation = useDeleteSchedule();
-  const { data: assignmentsData, refetch: refetchAssignments } = useTeachingAssignments({ per_page: 200 });
-  const assignments = assignmentsData?.data || [];
-  const createAssignmentMutation = useCreateTeachingAssignment();
-
-  const [isSyncingServer, setIsSyncingServer] = React.useState(false);
-
   // Fallback classes if database has none
   const displayClasses = React.useMemo(() => {
     if (classes.length > 0) {
@@ -211,10 +237,10 @@ export default function JadwalKelasPage() {
     // Generate fallback classes matching 7A-7F, 8A-8F, 9A-9F
     const mock: ClassDetailDto[] = [];
     ["7", "8", "9"].forEach((t) => {
-      ["A", "B", "C", "D", "E", "F"].forEach((sec) => {
+      ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"].forEach((sec) => {
         mock.push({
           id: `mock-${t}${sec.toLowerCase()}`,
-          code: `${t}${sec}`,
+          code: `CLS-${t}${sec}`,
           name: `Kelas ${t}${sec}`,
           grade: t,
           section: sec,
@@ -227,6 +253,43 @@ export default function JadwalKelasPage() {
     });
     return mock;
   }, [classes]);
+
+  // Active selected class object (available for queries)
+  const selectedClass = React.useMemo(() => {
+    if (!selectedClassId) return null;
+    return (
+      displayClasses.find(
+        (c) => c.id === selectedClassId || normalizeClassKey(c.code) === normalizeClassKey(selectedClassId)
+      ) || null
+    );
+  }, [selectedClassId, displayClasses]);
+
+  const { data: teachersData, refetch: refetchTeachers } = useTeachers({ per_page: 100 });
+  const teachers = teachersData?.data || [];
+  const createTeacherMutation = useCreateTeacher();
+
+  const { data: subjectsData, refetch: refetchSubjects } = useSubjects({ per_page: 100 });
+  const subjects = subjectsData?.data || [];
+  const createSubjectMutation = useCreateSubject();
+
+  // Query schedules filtered by selected class if available (max per_page: 100)
+  const { data: schedulesData, refetch: refetchSchedules } = useSchedules(
+    selectedClass?.id ? { class_id: selectedClass.id, per_page: 100 } : { per_page: 100 }
+  );
+  const backendSchedules = schedulesData?.data || [];
+
+  const createScheduleMutation = useCreateSchedule();
+  const updateScheduleMutation = useUpdateSchedule();
+  const deleteScheduleMutation = useDeleteSchedule();
+
+  // Query teaching assignments filtered by selected class (max per_page: 100)
+  const { data: assignmentsData, refetch: refetchAssignments } = useTeachingAssignments(
+    selectedClass?.id ? { class_id: selectedClass.id, per_page: 100 } : { per_page: 100 }
+  );
+  const assignments = assignmentsData?.data || [];
+  const createAssignmentMutation = useCreateTeachingAssignment();
+
+  const [isSyncingServer, setIsSyncingServer] = React.useState(false);
 
   // Local storage for time slots
   const [standardTimeSlots, setStandardTimeSlots] = React.useState<TimeSlot[]>(() => {
@@ -289,7 +352,7 @@ export default function JadwalKelasPage() {
 
         backendSchedules.forEach((bs) => {
           const matchedClass = displayClasses.find((c) => c.id === bs.class_id);
-          const classKey = matchedClass ? normalizeClassKey(matchedClass.code) : bs.class_id;
+          const classKey = matchedClass ? normalizeClassKey(matchedClass.code) : normalizeClassKey(bs.class_id);
 
           if (!backendGrouped[classKey]) {
             backendGrouped[classKey] = [];
@@ -300,7 +363,7 @@ export default function JadwalKelasPage() {
           const endTime = formatTimeDisplay(bs.ends_at ?? "");
           const formattedTime = (startTime && endTime)
             ? `${startTime} - ${endTime}`
-            : (bs.period_no ? `Jam ke-${bs.period_no}` : "");
+            : (bs.period_no ? getPeriodTimeRange(bs.period_no, bs.day_of_week) : "");
 
           const matchedSubject = subjects.find((s) => s.id === bs.subject_id);
           const matchedTeacher = teachers.find(
@@ -311,6 +374,7 @@ export default function JadwalKelasPage() {
             id: bs.id,
             day: dayName,
             time: formattedTime,
+            jamLabel: bs.period_no ? `Jam ${bs.period_no}` : undefined,
             subject: matchedSubject?.name || "Mata Pelajaran",
             code: matchedSubject?.code || (matchedSubject?.name ? matchedSubject.name.substring(0, 3).toUpperCase() : "MPL"),
             teacher: matchedTeacher?.full_name || "Guru Pengampu",
@@ -324,10 +388,12 @@ export default function JadwalKelasPage() {
           hasChanges = true;
         });
 
-        // Ensure default 7A schedule is always available if empty
+        // Ensure default 7A schedule is only used if nothing exists
         if (!updated["7a"] || updated["7a"].length === 0) {
-          updated["7a"] = DEFAULT_7A_SCHEDULE;
-          hasChanges = true;
+          if (!backendGrouped["7a"] || backendGrouped["7a"].length === 0) {
+            updated["7a"] = DEFAULT_7A_SCHEDULE;
+            hasChanges = true;
+          }
         }
 
         if (hasChanges) {
@@ -425,13 +491,25 @@ export default function JadwalKelasPage() {
       }
 
       // 5. Ensure Teaching Assignment exists
-      const existingAssignment = assignments.find(
+      let existingAssignment = assignments.find(
         (a) =>
           a.class_id === classId &&
-          a.subject_id === subjectId &&
-          a.teacher_id === teacherUserId &&
-          a.academic_year_id === currentYearId
+          a.subject_id === subjectId
       );
+
+      if (!existingAssignment) {
+        try {
+          const directCheck = await fetchPaginatedApi<TeachingAssignmentRecordDto[]>(
+            `/api/v1/teaching-assignments?class_id=${classId}&per_page=100`
+          );
+          if (directCheck?.data && Array.isArray(directCheck.data)) {
+            existingAssignment = directCheck.data.find(
+              (a) => a.subject_id === subjectId
+            );
+          }
+        } catch (_) {}
+      }
+
       if (existingAssignment) {
         return existingAssignment.id;
       }
@@ -449,16 +527,6 @@ export default function JadwalKelasPage() {
       return null;
     }
   };
-
-  // Active selected class object
-  const selectedClass = React.useMemo(() => {
-    if (!selectedClassId) return null;
-    return (
-      displayClasses.find(
-        (c) => c.id === selectedClassId || normalizeClassKey(c.code) === selectedClassId
-      ) || displayClasses[0]
-    );
-  }, [selectedClassId, displayClasses]);
 
   // Schedules for currently selected class
   const currentClassKey = selectedClass
@@ -489,12 +557,20 @@ export default function JadwalKelasPage() {
         list.push({
           id: `custom-${s.time.replace(/[^a-zA-Z0-9]/g, "-")}`,
           time: s.time,
-          label: s.jamLabel || "Jam Khusus",
+          label: s.jamLabel || s.time,
           isBreak: false,
         });
       }
     });
-    return list;
+
+    // Sort slots chronologically by start time
+    return list.sort((a, b) => {
+      const getStart = (t: string) => {
+        const p = t.split("-")[0]?.trim().replace(".", ":");
+        return p || "00:00";
+      };
+      return getStart(a.time).localeCompare(getStart(b.time));
+    });
   }, [standardTimeSlots, currentClassSchedules]);
 
   // Handlers for Navigation
